@@ -38,8 +38,13 @@ builder.Services.AddCors(options =>
     });
 });
 
+// MediatR Registration
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+
 // Dependency Injection
 builder.Services.AddScoped<ISubmissionRepository, SubmissionRepository>();
+builder.Services.AddScoped<IExamQuestionRepository, ExamQuestionRepository>();
+builder.Services.AddScoped<IExamSessionRepository, ExamSessionRepository>();
 builder.Services.AddScoped<IMailService, MailService>();
 builder.Services.AddScoped<SubmitContactCommandHandler>();
 builder.Services.AddScoped<SubmitRegistrationCommandHandler>();
