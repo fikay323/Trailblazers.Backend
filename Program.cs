@@ -8,6 +8,8 @@ using Trailblazers.Backend.Infrastructure.Persistence;
 using Trailblazers.Backend.Infrastructure.Persistence.Repositories;
 using Trailblazers.Backend.Infrastructure.Services;
 
+DotNetEnv.Env.Load();
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -47,6 +49,8 @@ builder.Services.AddMediatR(cfg =>
 });
 
 // Dependency Injection
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<IJambApiService, RapidApiJambService>();
 builder.Services.AddScoped<ISubmissionRepository, SubmissionRepository>();
 builder.Services.AddScoped<IExamQuestionRepository, ExamQuestionRepository>();
 builder.Services.AddScoped<IExamSessionRepository, ExamSessionRepository>();

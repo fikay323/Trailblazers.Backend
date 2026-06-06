@@ -1,12 +1,11 @@
-using System;
-using System.Collections.Generic;
+using Trailblazers.Backend.Core.Domain.Enums;
 
 namespace Trailblazers.Backend.Core.Domain.Entities
 {
     public class ExamQuestion
     {
         public Guid Id { get; private set; }
-        public string Subject { get; private set; }
+        public ExamSubject Subject { get; private set; }
         public int ExamYear { get; private set; }
         public string QuestionText { get; private set; }
         public char CorrectOption { get; private set; }
@@ -18,13 +17,12 @@ namespace Trailblazers.Backend.Core.Domain.Entities
         private ExamQuestion()
         {
             Options = new Dictionary<char, string>();
-            Subject = string.Empty;
             QuestionText = string.Empty;
         }
 
         public ExamQuestion(
             Guid id,
-            string subject,
+            ExamSubject subject,
             int examYear,
             string questionText,
             char correctOption,
@@ -35,8 +33,8 @@ namespace Trailblazers.Backend.Core.Domain.Entities
             if (id == Guid.Empty)
                 throw new ArgumentException("Id cannot be empty.", nameof(id));
 
-            if (string.IsNullOrWhiteSpace(subject))
-                throw new ArgumentException("Subject is required.", nameof(subject));
+            if (!Enum.IsDefined(typeof(ExamSubject), subject))
+                throw new ArgumentException("Subject must be a defined ExamSubject.", nameof(subject));
 
             if (string.IsNullOrWhiteSpace(questionText))
                 throw new ArgumentException("Question text is required.", nameof(questionText));
@@ -45,7 +43,7 @@ namespace Trailblazers.Backend.Core.Domain.Entities
                 throw new ArgumentException("Options Dictionary cannot be null or empty.", nameof(options));
 
             Id = id;
-            Subject = subject.Trim();
+            Subject = subject;
             ExamYear = examYear;
             QuestionText = questionText.Trim();
             CorrectOption = correctOption;

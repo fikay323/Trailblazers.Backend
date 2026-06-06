@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Trailblazers.Backend.Core.Application.Interfaces;
 using Trailblazers.Backend.Core.Domain.Entities;
+using Trailblazers.Backend.Core.Domain.Enums;
 
 namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
 {
@@ -9,11 +10,18 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
         public async Task<IEnumerable<ExamQuestion>> GetQuestionsByYearAndSubjectsAsync(int year,
             IEnumerable<string> subjects)
         {
-            var subjectsList = subjects.Select(s => s.Trim().ToLower()).ToList();
+            var subjectsEnumList = new List<ExamSubject>();
+            foreach (var s in subjects)
+            {
+                if (Enum.TryParse<ExamSubject>(s, true, out var parsedSubject))
+                {
+                    subjectsEnumList.Add(parsedSubject);
+                }
+            }
 
             return await context.ExamQuestions
                 .AsNoTracking()
-                .Where(q => q.ExamYear == year && subjectsList.Contains(q.Subject.ToLower()))
+                .Where(q => q.ExamYear == year && subjectsEnumList.Contains(q.Subject))
                 .ToListAsync();
         }
 

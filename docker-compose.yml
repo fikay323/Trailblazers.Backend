@@ -36,6 +36,9 @@ services:
       - ADMIN_API_KEY=${ADMIN_API_KEY}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
       - ASPNETCORE_ENVIRONMENT=Development
+      - RAPID_API_KEY=${RAPID_API_KEY}
+      - RAPID_API_HOST=${RAPID_API_HOST}
+      - RAPID_API_BASE_URL=${RAPID_API_BASE_URL}
     ports:
       - "8080:8080"
     depends_on:

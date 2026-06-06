@@ -15,17 +15,10 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.GetExamMetadata
         {
             var subjects = new List<string>
             {
-                "Use of English",
-                "Mathematics",
-                "Physics",
-                "Chemistry",
-                "Biology",
-                "Economics",
-                "Government",
-                "Literature in English",
-                "Christian Religious Studies",
-                "Geography",
-                "Commerce"
+                "English", "Mathematics", "Biology", "Chemistry", "Physics",
+                "Geography", "Civic Education", "Government", "Literature in English",
+                "Economics", "Commerce", "Christian Religious Studies",
+                "Islamic Religious Studies", "History"
             };
 
             var years = Enumerable.Range(1980, 2025 - 1980 + 1).OrderByDescending(y => y).ToList();

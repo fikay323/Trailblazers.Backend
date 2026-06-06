@@ -51,7 +51,7 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.StartExam
             // 4. Map questions to QuestionDto (stripping CorrectOption)
             var questionDtos = questionsList.Select(q => new QuestionDto(
                 q.Id,
-                q.Subject,
+                q.Subject.ToString(),
                 q.QuestionText,
                 q.Options,
                 q.ImageUrl,

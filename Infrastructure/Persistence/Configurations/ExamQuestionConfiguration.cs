@@ -17,8 +17,8 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Configurations
                 .HasColumnName("id");
 
             builder.Property(q => q.Subject)
-                .IsRequired()
-                .HasMaxLength(100)
+                .HasConversion<string>()
+                .HasColumnType("text")
                 .HasColumnName("subject");
 
             builder.Property(q => q.ExamYear)
