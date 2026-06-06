@@ -1,6 +1,36 @@
 @Trailblazers.Backend_HostAddress = http://localhost:5011
 
-GET {{Trailblazers.Backend_HostAddress}}/weatherforecast/
+### Submit a Contact Form
+POST {{Trailblazers.Backend_HostAddress}}/api/submissions/contact
+Content-Type: application/json
+
+{
+  "name": "Jane Doe",
+  "email": "janedoe@example.com",
+  "message": "Hello, I am interested in partnering with Trailblazers. Please let me know the best time to connect."
+}
+
+### Submit a Student Registration
+POST {{Trailblazers.Backend_HostAddress}}/api/submissions/register
+Content-Type: application/json
+
+{
+  "name": "Alex Smith",
+  "email": "alex.smith@example.com",
+  "phoneNumber": "+1234567890",
+  "targetExam": "JAMB"
+}
+
+### Get Submissions (Unauthorized)
+GET {{Trailblazers.Backend_HostAddress}}/api/submissions
 Accept: application/json
 
-###
+### Get Submissions (Authorized - Contacts)
+GET {{Trailblazers.Backend_HostAddress}}/api/submissions?type=0&pageNumber=1&pageSize=10
+X-API-KEY: trailblazers-secret-key
+Accept: application/json
+
+### Get Submissions (Authorized - Registrations)
+GET {{Trailblazers.Backend_HostAddress}}/api/submissions?type=1&pageNumber=1&pageSize=10
+X-API-KEY: trailblazers-secret-key
+Accept: application/json

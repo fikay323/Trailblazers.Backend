@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: trailblazers_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-trailblazers_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - trailblazers_network
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trailblazers_backend
+    restart: unless-stopped
+    environment:
+      - CONNECTION_STRING=Host=db;Database=${POSTGRES_DB:-trailblazers_db};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:-postgres}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM}
+      - SMTP_ADMIN_EMAIL=${SMTP_ADMIN_EMAIL}
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    networks:
+      - trailblazers_network
+
+volumes:
+  postgres_data:
+
+networks:
+  trailblazers_network:
+    driver: bridge
