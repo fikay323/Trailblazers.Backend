@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Trailblazers.Backend.Core.Application.Features.Exams.GetExamMetadata;
 using Trailblazers.Backend.Core.Application.Interfaces;
 using Trailblazers.Backend.Core.Application.Submissions.Commands;
 using Trailblazers.Backend.Core.Application.Submissions.Queries;
@@ -39,7 +40,11 @@ builder.Services.AddCors(options =>
 });
 
 // MediatR Registration
-builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
+    cfg.RegisterServicesFromAssembly(typeof(GetExamMetadataQuery).Assembly);
+});
 
 // Dependency Injection
 builder.Services.AddScoped<ISubmissionRepository, SubmissionRepository>();
@@ -73,8 +78,8 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        context.Database.EnsureCreated();
-        app.Logger.LogInformation("Database initialized successfully.");
+        context.Database.Migrate();
+        app.Logger.LogInformation("Database migrations applied successfully.");
     }
     catch (Exception ex)
     {

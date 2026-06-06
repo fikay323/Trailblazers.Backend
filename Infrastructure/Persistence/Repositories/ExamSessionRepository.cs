@@ -1,31 +1,30 @@
-using System.Collections.Concurrent;
+using Microsoft.EntityFrameworkCore;
 using Trailblazers.Backend.Core.Application.Interfaces;
 using Trailblazers.Backend.Core.Domain.Entities;
 
 namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
 {
-    public class ExamSessionRepository : IExamSessionRepository
+    public class ExamSessionRepository(ApplicationDbContext context) : IExamSessionRepository
     {
-        private static readonly ConcurrentDictionary<Guid, ExamSession> Sessions = new();
-
-        public Task<ExamSession?> GetByIdAsync(Guid sessionId)
+        public async Task<ExamSession?> GetByIdAsync(Guid sessionId)
         {
-            Sessions.TryGetValue(sessionId, out var session);
-            return Task.FromResult(session);
+            return await context.ExamSessions
+                .Include(s => s.Answers)
+                .FirstOrDefaultAsync(s => s.Id == sessionId);
         }
 
-        public Task AddAsync(ExamSession session)
+        public async Task AddAsync(ExamSession session)
         {
             ArgumentNullException.ThrowIfNull(session);
-            Sessions[session.Id] = session;
-            return Task.CompletedTask;
+            await context.ExamSessions.AddAsync(session);
+            await context.SaveChangesAsync();
         }
 
         public Task UpdateAsync(ExamSession session)
         {
             ArgumentNullException.ThrowIfNull(session);
-            Sessions[session.Id] = session;
-            return Task.CompletedTask;
+            context.ExamSessions.Update(session);
+            return context.SaveChangesAsync();
         }
     }
 }
