@@ -27,13 +27,27 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
             var finalQuestions = new List<ExamQuestion>();
             foreach (var subject in subjectsEnumList)
             {
-                var limit = subject == ExamSubject.English ? 50 : 40;
-                var subjectQuestions = allQuestions
-                    .Where(q => q.Subject == subject)
-                    .OrderBy(_ => Random.Shared.Next())
-                    .Take(limit);
+                var threshold = subject == ExamSubject.English ? 50 : 40;
+                var targetYearSubjectQuestions = allQuestions.Where(q => q.Subject == subject).ToList();
+                var primaryQuestions = targetYearSubjectQuestions.OrderBy(_ => Random.Shared.Next()).Take(threshold).ToList();
 
-                finalQuestions.AddRange(subjectQuestions);
+                if (primaryQuestions.Count < threshold)
+                {
+                    var deficit = threshold - primaryQuestions.Count;
+                    var backfillQuestions = await context.ExamQuestions
+                        .AsNoTracking()
+                        .Where(q => q.Subject == subject && q.ExamYear != year)
+                        .ToListAsync();
+
+                    var additionalQuestions = backfillQuestions
+                        .OrderBy(_ => Random.Shared.Next())
+                        .Take(deficit)
+                        .ToList();
+
+                    primaryQuestions.AddRange(additionalQuestions);
+                }
+
+                finalQuestions.AddRange(primaryQuestions);
             }
 
             return finalQuestions;

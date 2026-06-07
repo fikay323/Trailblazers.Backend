@@ -21,7 +21,7 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.GetExamMetadata
                 "Islamic Religious Studies", "History"
             };
 
-            var years = Enumerable.Range(1980, 2025 - 1980 + 1).OrderByDescending(y => y).ToList();
+            var years = Enumerable.Range(1980, 2023 - 1980 + 1).OrderByDescending(y => y).ToList();
 
             return Task.FromResult(new ExamMetadataDto(subjects, years));
         }

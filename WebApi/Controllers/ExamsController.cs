@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Mvc;
 using Trailblazers.Backend.Core.Application.Features.Exams.GetExamMetadata;
 using Trailblazers.Backend.Core.Application.Features.Exams.StartExam;
 using Trailblazers.Backend.Core.Application.Features.Exams.SubmitExam;
+using Trailblazers.Backend.Core.Application.Features.Exams.GetExamResult;
+using Trailblazers.Backend.Core.Application.Exceptions;
 
 namespace Trailblazers.Backend.WebApi.Controllers
 {
@@ -61,6 +63,24 @@ namespace Trailblazers.Backend.WebApi.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { error = "Failed to submit exam session.", details = ex.Message });
+            }
+        }
+
+        [HttpGet("sessions/{sessionId}/result")]
+        public async Task<IActionResult> GetExamResult(Guid sessionId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var result = await mediator.Send(new GetExamResultQuery(sessionId), cancellationToken);
+                return Ok(result);
+            }
+            catch (NotFoundException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = "Failed to load exam performance report.", details = ex.Message });
             }
         }
     }

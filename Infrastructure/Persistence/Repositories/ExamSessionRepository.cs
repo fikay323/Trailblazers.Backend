@@ -32,5 +32,13 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
             ArgumentNullException.ThrowIfNull(result);
             await context.ExamResults.AddAsync(result);
         }
+
+        public async Task<ExamResult?> GetResultBySessionIdAsync(Guid sessionId)
+        {
+            return await context.ExamResults
+                .Include(r => r.Session)
+                .ThenInclude(s => s!.Answers)
+                .FirstOrDefaultAsync(r => r.SessionId == sessionId);
+        }
     }
 }
