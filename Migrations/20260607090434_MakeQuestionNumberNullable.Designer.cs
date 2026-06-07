@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Trailblazers.Backend.Infrastructure.Persistence;
@@ -11,9 +12,11 @@ using Trailblazers.Backend.Infrastructure.Persistence;
 namespace Trailblazers.Backend.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260607090434_MakeQuestionNumberNullable")]
+    partial class MakeQuestionNumberNullable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -79,39 +82,6 @@ namespace Trailblazers.Backend.Migrations
                         .HasDatabaseName("IX_exam_questions_year_subject");
 
                     b.ToTable("exam_questions", (string)null);
-                });
-
-            modelBuilder.Entity("Trailblazers.Backend.Core.Domain.Entities.ExamResult", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("CandidateId")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("candidate_id");
-
-                    b.Property<DateTimeOffset>("CompletedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("completed_at");
-
-                    b.Property<Guid>("SessionId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("session_id");
-
-                    b.Property<int>("TotalScore")
-                        .HasColumnType("integer")
-                        .HasColumnName("total_score");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("SessionId")
-                        .IsUnique();
-
-                    b.ToTable("exam_results", (string)null);
                 });
 
             modelBuilder.Entity("Trailblazers.Backend.Core.Domain.Entities.ExamSession", b =>
@@ -194,17 +164,6 @@ namespace Trailblazers.Backend.Migrations
                         .HasDatabaseName("IX_submissions_type_created_at_desc");
 
                     b.ToTable("submissions", (string)null);
-                });
-
-            modelBuilder.Entity("Trailblazers.Backend.Core.Domain.Entities.ExamResult", b =>
-                {
-                    b.HasOne("Trailblazers.Backend.Core.Domain.Entities.ExamSession", "Session")
-                        .WithOne()
-                        .HasForeignKey("Trailblazers.Backend.Core.Domain.Entities.ExamResult", "SessionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Session");
                 });
 
             modelBuilder.Entity("Trailblazers.Backend.Core.Domain.Entities.ExamSession", b =>

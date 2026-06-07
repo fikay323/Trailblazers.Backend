@@ -9,7 +9,7 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions
     public record SeedAllQuestionsCommand : IRequest;
 
     public class SeedAllQuestionsCommandHandler(
-        IServiceProvider serviceProvider,
+        IServiceScopeFactory scopeFactory,
         ILogger<SeedAllQuestionsCommandHandler> logger)
         : IRequestHandler<SeedAllQuestionsCommand>
     {
@@ -19,66 +19,79 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions
 
             int currentYear = DateTime.UtcNow.Year;
             var subjects = Enum.GetValues<ExamSubject>();
+            var queue = new List<(ExamSubject Subject, int Year)>();
 
             foreach (var subject in subjects)
             {
-                logger.LogInformation("Seeding questions for subject enum: {Subject}", subject);
-
-                for (int year = currentYear; year >= 2011; year--)
+                for (int year = currentYear - 2; year >= 2000; year--)
                 {
-                    if (cancellationToken.IsCancellationRequested)
+                    queue.Add((subject, year));
+                }
+            }
+
+            logger.LogInformation("Flattened queue contains {Count} subject-year combinations.", queue.Count);
+
+            var parallelOptions = new ParallelOptions
+            {
+                MaxDegreeOfParallelism = 4,
+                CancellationToken = cancellationToken
+            };
+
+            await Parallel.ForEachAsync(queue, parallelOptions, async (item, ct) =>
+            {
+                var (subject, year) = item;
+
+                try
+                {
+                    using var scope = scopeFactory.CreateScope();
+                    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                    var apiService = scope.ServiceProvider.GetRequiredService<IJambApiService>();
+
+                    var fetched = (await apiService.FetchQuestionsAsync(subject, year, 40)).ToList();
+
+                    if (fetched.Count > 0)
                     {
-                        logger.LogWarning("Seeding operation was cancelled.");
-                        return;
-                    }
+                        var fetchedAlocIds = fetched.Select(q => q.AlocId).ToList();
 
-                    try
-                    {
-                        // Create a separate scope for DbContext to avoid tracking/concurrency issues during the long loop
-                        using var scope = serviceProvider.CreateScope();
-                        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-                        var apiService = scope.ServiceProvider.GetRequiredService<IJambApiService>();
+                        var existingIds = await dbContext.ExamQuestions
+                            .Where(q => fetchedAlocIds.Contains(q.AlocId))
+                            .Select(q => q.AlocId)
+                            .ToListAsync(ct);
 
-                        // Check if questions already exist for this combination
-                        var exists = await dbContext.ExamQuestions
-                            .AnyAsync(q => q.Subject == subject && q.ExamYear == year, cancellationToken);
+                        var newQuestionsToInsert = fetched.Where(q => !existingIds.Contains(q.AlocId)).ToList();
 
-                        if (exists)
-                        {
-                            logger.LogInformation("Questions for {Subject} ({Year}) already exist. Skipping.", subject,
-                                year);
-                            continue;
-                        }
-
-                        logger.LogInformation("Fetching questions for {Subject} ({Year}) from RapidAPI...", subject,
-                            year);
-                        var fetched = (await apiService.FetchQuestionsAsync(subject, year, 40)).ToList();
-
-                        if (fetched.Count > 0)
+                        if (newQuestionsToInsert.Count > 0)
                         {
                             logger.LogInformation(
-                                "Successfully fetched {Count} questions. Batch inserting to database...",
-                                fetched.Count);
-                            await dbContext.ExamQuestions.AddRangeAsync(fetched, cancellationToken);
-                            await dbContext.SaveChangesAsync(cancellationToken);
+                                "Found {NewCount} new questions out of {TotalFetched} fetched for {Subject} ({Year}). Batch inserting...",
+                                newQuestionsToInsert.Count, fetched.Count, subject, year);
+
+                            await dbContext.ExamQuestions.AddRangeAsync(newQuestionsToInsert, ct);
+                            await dbContext.SaveChangesAsync(ct);
+
                             logger.LogInformation("Seeded questions for {Subject} ({Year}) successfully.", subject,
                                 year);
                         }
                         else
                         {
-                            logger.LogWarning("No questions returned from API for {Subject} ({Year}).", subject, year);
+                            logger.LogInformation(
+                                "All {TotalFetched} fetched questions for {Subject} ({Year}) already exist. Skipping database insert.",
+                                fetched.Count, subject, year);
                         }
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        logger.LogError(ex, "An error occurred while seeding questions for {Subject} ({Year}).",
+                        logger.LogWarning(
+                            "No questions returned from API for {Subject} ({Year}) (or iteration was skipped).",
                             subject, year);
                     }
-
-                    // Respect rate limits and sleep 2000ms between inner loop iterations
-                    await Task.Delay(2000, cancellationToken);
                 }
-            }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "An error occurred while seeding questions for {Subject} ({Year}).", subject,
+                        year);
+                }
+            });
 
             logger.LogInformation("Seeding job finished processing all subjects and years.");
         }

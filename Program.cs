@@ -49,8 +49,10 @@ builder.Services.AddMediatR(cfg =>
 });
 
 // Dependency Injection
-builder.Services.AddHttpClient();
-builder.Services.AddScoped<IJambApiService, RapidApiJambService>();
+builder.Services.AddHttpClient<IJambApiService, RapidApiJambService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(500);
+});
 builder.Services.AddScoped<ISubmissionRepository, SubmissionRepository>();
 builder.Services.AddScoped<IExamQuestionRepository, ExamQuestionRepository>();
 builder.Services.AddScoped<IExamSessionRepository, ExamSessionRepository>();

@@ -55,5 +55,13 @@ namespace Trailblazers.Backend.Core.Domain.Entities
             Score = calculatedScore;
             IsCompleted = true;
         }
+
+        public void Complete()
+        {
+            if (IsCompleted)
+                throw new InvalidOperationException("The session has already been completed.");
+
+            IsCompleted = true;
+        }
     }
 }

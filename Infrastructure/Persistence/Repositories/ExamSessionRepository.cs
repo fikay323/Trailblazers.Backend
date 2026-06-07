@@ -26,5 +26,11 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
             context.ExamSessions.Update(session);
             return context.SaveChangesAsync();
         }
+
+        public async Task AddResultAsync(ExamResult result)
+        {
+            ArgumentNullException.ThrowIfNull(result);
+            await context.ExamResults.AddAsync(result);
+        }
     }
 }

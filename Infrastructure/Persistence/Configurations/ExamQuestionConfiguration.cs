@@ -50,6 +50,17 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Configurations
                          new Dictionary<char, string>()
                 );
 
+            builder.Property(q => q.AlocId)
+                .IsRequired()
+                .HasColumnName("aloc_id");
+
+            builder.Property(q => q.QuestionNumber)
+                .HasColumnName("question_number");
+
+            builder.HasIndex(q => q.AlocId)
+                .IsUnique()
+                .HasDatabaseName("IX_exam_questions_aloc_id");
+
             // Composite index on (ExamYear, Subject)
             builder.HasIndex(q => new { q.ExamYear, q.Subject })
                 .HasDatabaseName("IX_exam_questions_year_subject");

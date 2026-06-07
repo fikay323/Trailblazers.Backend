@@ -65,16 +65,26 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SubmitExam
                 session.Answers.Add(new StudentAnswer(kvp.Key, kvp.Value));
             }
 
-            // 6. Complete the session
-            session.CompleteSession(calculatedScore);
+            // 6. Instantiate the new ExamResult entity
+            var examResult = new ExamResult(
+                id: Guid.NewGuid(),
+                sessionId: session.Id,
+                candidateId: session.StudentEmail,
+                totalScore: calculatedScore,
+                completedAt: DateTimeOffset.UtcNow
+            );
 
-            // 7. Update the session via the repository
+            // 7. Add result to the context and mark session as Completed
+            await sessionRepository.AddResultAsync(examResult);
+            session.Complete();
+
+            // 8. Save the changes via the repository
             await sessionRepository.UpdateAsync(session);
 
             return new ExamSubmitResponseDto(
                 Score: calculatedScore,
                 TotalQuestions: questions.Count,
-                CompletedAt: DateTimeOffset.UtcNow
+                CompletedAt: examResult.CompletedAt
             );
         }
     }

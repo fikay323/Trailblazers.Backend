@@ -19,10 +19,24 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
                 }
             }
 
-            return await context.ExamQuestions
+            var allQuestions = await context.ExamQuestions
                 .AsNoTracking()
                 .Where(q => q.ExamYear == year && subjectsEnumList.Contains(q.Subject))
                 .ToListAsync();
+
+            var finalQuestions = new List<ExamQuestion>();
+            foreach (var subject in subjectsEnumList)
+            {
+                var limit = subject == ExamSubject.English ? 50 : 40;
+                var subjectQuestions = allQuestions
+                    .Where(q => q.Subject == subject)
+                    .OrderBy(_ => Random.Shared.Next())
+                    .Take(limit);
+
+                finalQuestions.AddRange(subjectQuestions);
+            }
+
+            return finalQuestions;
         }
 
         public async Task<IEnumerable<ExamQuestion>> GetByIdsAsync(IEnumerable<Guid> ids)

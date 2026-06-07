@@ -12,6 +12,8 @@ namespace Trailblazers.Backend.Core.Domain.Entities
         public Dictionary<char, string> Options { get; private set; }
         public string? ImageUrl { get; private set; }
         public string? ComprehensionPassage { get; private set; }
+        public int AlocId { get; private set; }
+        public int? QuestionNumber { get; private set; }
 
         // Parameterless constructor for EF Core if needed, though domain is pure C#
         private ExamQuestion()
@@ -27,6 +29,8 @@ namespace Trailblazers.Backend.Core.Domain.Entities
             string questionText,
             char correctOption,
             Dictionary<char, string> options,
+            int alocId,
+            int? questionNumber = null,
             string? imageUrl = null,
             string? comprehensionPassage = null)
         {
@@ -36,8 +40,8 @@ namespace Trailblazers.Backend.Core.Domain.Entities
             if (!Enum.IsDefined(typeof(ExamSubject), subject))
                 throw new ArgumentException("Subject must be a defined ExamSubject.", nameof(subject));
 
-            if (string.IsNullOrWhiteSpace(questionText))
-                throw new ArgumentException("Question text is required.", nameof(questionText));
+            // if (string.IsNullOrWhiteSpace(questionText))
+            //     throw new ArgumentException("Question text is required.", nameof(questionText));
 
             if (options == null || options.Count == 0)
                 throw new ArgumentException("Options Dictionary cannot be null or empty.", nameof(options));
@@ -48,6 +52,8 @@ namespace Trailblazers.Backend.Core.Domain.Entities
             QuestionText = questionText.Trim();
             CorrectOption = correctOption;
             Options = new Dictionary<char, string>(options);
+            AlocId = alocId;
+            QuestionNumber = questionNumber;
             ImageUrl = imageUrl;
             ComprehensionPassage = comprehensionPassage;
         }

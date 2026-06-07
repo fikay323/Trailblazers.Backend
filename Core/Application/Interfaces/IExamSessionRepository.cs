@@ -7,5 +7,6 @@ namespace Trailblazers.Backend.Core.Application.Interfaces
         Task<ExamSession?> GetByIdAsync(Guid sessionId);
         Task AddAsync(ExamSession session);
         Task UpdateAsync(ExamSession session);
+        Task AddResultAsync(ExamResult result);
     }
 }

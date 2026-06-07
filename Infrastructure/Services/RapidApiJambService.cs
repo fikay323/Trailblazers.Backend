@@ -6,15 +6,11 @@ using Trailblazers.Backend.Infrastructure.Extensions;
 
 namespace Trailblazers.Backend.Infrastructure.Services
 {
-    public class RapidApiJambService(IHttpClientFactory httpClientFactory, ILogger<RapidApiJambService> logger)
+    public class RapidApiJambService(HttpClient client, ILogger<RapidApiJambService> logger)
         : IJambApiService
     {
         public async Task<IEnumerable<ExamQuestion>> FetchQuestionsAsync(ExamSubject subject, int year, int limit)
         {
-            logger.LogInformation(
-                "Initiating JAMB API request to fetch past questions. Subject: {Subject}, Year: {Year}, Limit: {Limit}",
-                subject, year, limit);
-
             var apiKey = Environment.GetEnvironmentVariable("RAPID_API_KEY");
             var baseUrl = Environment.GetEnvironmentVariable("RAPID_API_BASE_URL");
 
@@ -30,18 +26,18 @@ namespace Trailblazers.Backend.Infrastructure.Services
                 throw new InvalidOperationException("Environment variable RAPID_API_BASE_URL is missing or empty.");
             }
 
-            var client = httpClientFactory.CreateClient();
-            client.DefaultRequestHeaders.Add("AccessToken", apiKey);
+            if (!client.DefaultRequestHeaders.Contains("AccessToken"))
+            {
+                client.DefaultRequestHeaders.Add("AccessToken", apiKey);
+            }
 
             // Construct the query URL
             var url = $"{baseUrl}?subject={Uri.EscapeDataString(subject.ToAlocSlug())}&year={year}";
 
             try
             {
-                logger.LogInformation(
-                    "Sending GET request to external JAMB API.\n[URL]: {Url}\n[Subject]: {Subject}\n[Year]: {Year}",
-                    url, subject, year);
                 var response = await client.GetAsync(url);
+
                 if (!response.IsSuccessStatusCode)
                 {
                     logger.LogError("External JAMB API request failed.\n[Status Code]: {StatusCode}\n[URL]: {Url}",
@@ -50,6 +46,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
                 }
 
                 var apiResult = await response.Content.ReadFromJsonAsync<AlocApiResponse>();
+
                 if (apiResult?.Data == null)
                 {
                     logger.LogWarning(
@@ -104,6 +101,8 @@ namespace Trailblazers.Backend.Infrastructure.Services
                         dto.QuestionText ?? "Question text missing",
                         correctOption,
                         options,
+                        dto.Id,
+                        dto.QuestionNub,
                         imageUrl: string.IsNullOrWhiteSpace(dto.Image) ? null : dto.Image.Trim(),
                         comprehensionPassage: passage
                     );
@@ -121,35 +120,39 @@ namespace Trailblazers.Backend.Infrastructure.Services
         // ALOC API Response DTOs
         private class AlocApiResponse
         {
-            [JsonPropertyName("status")] public int Status { get; }
+            [JsonPropertyName("status")] public int Status { get; set; }
 
-            [JsonPropertyName("message")] public string? Message { get; }
+            [JsonPropertyName("message")] public string? Message { get; set; }
 
-            [JsonPropertyName("data")] public List<AlocQuestionDto>? Data { get; }
+            [JsonPropertyName("data")] public List<AlocQuestionDto>? Data { get; set; }
         }
 
         private class AlocQuestionDto
         {
-            [JsonPropertyName("question")] public string? QuestionText { get; }
+            [JsonPropertyName("id")] public int Id { get; set; }
 
-            [JsonPropertyName("option")] public AlocOptionsDto? Option { get; }
+            [JsonPropertyName("questionNub")] public int? QuestionNub { get; set; }
 
-            [JsonPropertyName("answer")] public string? Answer { get; }
+            [JsonPropertyName("question")] public string? QuestionText { get; set; }
 
-            [JsonPropertyName("section")] public string? Section { get; }
+            [JsonPropertyName("option")] public AlocOptionsDto? Option { get; set; }
 
-            [JsonPropertyName("image")] public string? Image { get; }
+            [JsonPropertyName("answer")] public string? Answer { get; set; }
+
+            [JsonPropertyName("section")] public string? Section { get; set; }
+
+            [JsonPropertyName("image")] public string? Image { get; set; }
         }
 
         private class AlocOptionsDto
         {
-            [JsonPropertyName("a")] public string? A { get; }
+            [JsonPropertyName("a")] public string? A { get; set; }
 
-            [JsonPropertyName("b")] public string? B { get; }
+            [JsonPropertyName("b")] public string? B { get; set; }
 
-            [JsonPropertyName("c")] public string? C { get; }
+            [JsonPropertyName("c")] public string? C { get; set; }
 
-            [JsonPropertyName("d")] public string? D { get; }
+            [JsonPropertyName("d")] public string? D { get; set; }
         }
     }
 }

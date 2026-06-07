@@ -8,6 +8,7 @@ namespace Trailblazers.Backend.Infrastructure.Persistence
         public DbSet<Submission> Submissions => Set<Submission>();
         public DbSet<ExamQuestion> ExamQuestions => Set<ExamQuestion>();
         public DbSet<ExamSession> ExamSessions => Set<ExamSession>();
+        public DbSet<ExamResult> ExamResults => Set<ExamResult>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
