@@ -60,7 +60,8 @@ builder.Services.AddScoped<IMailService, MailService>();
 builder.Services.AddScoped<SubmitContactCommandHandler>();
 builder.Services.AddScoped<SubmitRegistrationCommandHandler>();
 builder.Services.AddScoped<GetSubmissionsQueryHandler>();
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<ApplicationDbContext>();
 
 var app = builder.Build();
 
