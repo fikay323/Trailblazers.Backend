@@ -60,6 +60,7 @@ builder.Services.AddScoped<IMailService, MailService>();
 builder.Services.AddScoped<SubmitContactCommandHandler>();
 builder.Services.AddScoped<SubmitRegistrationCommandHandler>();
 builder.Services.AddScoped<GetSubmissionsQueryHandler>();
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
@@ -76,6 +77,9 @@ app.UseHttpsRedirection();
 app.UseAuthorization();
 
 app.MapControllers();
+
+
+app.MapHealthChecks("/api/health");
 
 // Apply migrations / ensure database exists on startup
 using (var scope = app.Services.CreateScope())
