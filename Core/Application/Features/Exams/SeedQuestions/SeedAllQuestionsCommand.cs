@@ -33,7 +33,7 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions
 
             var parallelOptions = new ParallelOptions
             {
-                MaxDegreeOfParallelism = 4,
+                MaxDegreeOfParallelism = 3,
                 CancellationToken = cancellationToken
             };
 

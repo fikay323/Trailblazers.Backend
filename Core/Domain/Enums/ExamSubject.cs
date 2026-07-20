@@ -10,11 +10,15 @@ namespace Trailblazers.Backend.Core.Domain.Enums
         Geography = 6,
         CivicEducation = 7,
         Government = 8,
-        LiteratureInEnglish = 9,
+        Englishlit = 9,
         Economics = 10,
         Commerce = 11,
-        ChristianReligiousStudies = 12,
-        IslamicReligiousStudies = 13,
-        History = 14
+        Crk = 12,
+        Irk = 13,
+        History = 14,
+        Accounting = 15,
+        Civiledu = 16,
+        Insurance = 17,
+        Currentaffairs = 18,
     }
 }

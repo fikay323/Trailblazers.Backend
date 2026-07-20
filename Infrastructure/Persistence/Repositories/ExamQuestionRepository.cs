@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Trailblazers.Backend.Core.Application.Interfaces;
 using Trailblazers.Backend.Core.Domain.Entities;
 using Trailblazers.Backend.Core.Domain.Enums;
+using Trailblazers.Backend.Infrastructure.Extensions;
 
 namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
 {
@@ -13,9 +14,10 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
             var subjectsEnumList = new List<ExamSubject>();
             foreach (var s in subjects)
             {
-                if (Enum.TryParse<ExamSubject>(s, true, out var parsedSubject))
+                var parsedSubject = ExamSubjectExtensions.ToExamSubject(s);
+                if (parsedSubject.HasValue)
                 {
-                    subjectsEnumList.Add(parsedSubject);
+                    subjectsEnumList.Add(parsedSubject.Value);
                 }
             }
 
