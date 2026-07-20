@@ -61,7 +61,13 @@ builder.Services.AddScoped<SubmitContactCommandHandler>();
 builder.Services.AddScoped<SubmitRegistrationCommandHandler>();
 builder.Services.AddScoped<GetSubmissionsQueryHandler>();
 builder.Services.AddHealthChecks()
-    .AddDbContextCheck<ApplicationDbContext>();
+    .AddDbContextCheck<ApplicationDbContext>(
+        customTestQuery: async (context, cancellationToken) =>
+        {
+            await RelationalDatabaseFacadeExtensions.ExecuteSqlRawAsync(context.Database, "SELECT 1",
+                cancellationToken);
+            return true;
+        });
 
 var app = builder.Build();
 
