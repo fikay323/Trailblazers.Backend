@@ -6,23 +6,23 @@ namespace Trailblazers.Backend.Infrastructure.Extensions
     {
         private static readonly Dictionary<ExamSubject, string> Slugs = new()
         {
-            { ExamSubject.English, "english" },
-            { ExamSubject.Mathematics, "mathematics" },
-            { ExamSubject.Biology, "biology" },
-            { ExamSubject.Chemistry, "chemistry" },
-            { ExamSubject.Physics, "physics" },
-            { ExamSubject.Geography, "geography" },
-            { ExamSubject.CivicEducation, "civiledu" },
-            { ExamSubject.Government, "government" },
-            { ExamSubject.Englishlit, "englishlit" },
-            { ExamSubject.Economics, "economics" },
-            { ExamSubject.Commerce, "commerce" },
-            { ExamSubject.Crk, "crk" },
-            { ExamSubject.Irk, "irk" },
-            { ExamSubject.History, "history" },
-            { ExamSubject.Accounting, "accounting" },
-            { ExamSubject.Insurance, "insurance" },
-            { ExamSubject.Currentaffairs, "currentaffairs" }
+            { ExamSubject.English, "English" },
+            { ExamSubject.Mathematics, "Mathematics" },
+            { ExamSubject.Commerce, "Commerce" },
+            { ExamSubject.Accounting, "Accounting" },
+            { ExamSubject.Biology, "Biology" },
+            { ExamSubject.Physics, "Physics" },
+            { ExamSubject.Chemistry, "Chemistry" },
+            { ExamSubject.Englishlit, "Englishlit" },
+            { ExamSubject.Government, "Government" },
+            { ExamSubject.Crk, "Crk" },
+            { ExamSubject.Geography, "Geography" },
+            { ExamSubject.Economics, "Economics" },
+            { ExamSubject.Irk, "Irk" },
+            { ExamSubject.Civiledu, "Civiledu" },
+            { ExamSubject.Insurance, "Insurance" },
+            { ExamSubject.Currentaffairs, "Currentaffairs" },
+            { ExamSubject.History, "History" }
         };
 
         public static string ToAlocSlug(this ExamSubject subject)
