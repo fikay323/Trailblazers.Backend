@@ -29,8 +29,7 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
             var finalQuestions = new List<ExamQuestion>();
             foreach (var subject in subjectsEnumList)
             {
-                // var threshold = subject == ExamSubject.English ? 50 : 40;
-                var threshold = 40;
+                var threshold = subject == ExamSubject.English ? 50 : 40;
                 var targetYearSubjectQuestions = allQuestions.Where(q => q.Subject == subject).ToList();
                 var primaryQuestions = targetYearSubjectQuestions.OrderBy(_ => Random.Shared.Next()).Take(threshold)
                     .ToList();
