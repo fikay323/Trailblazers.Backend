@@ -1,12 +1,13 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions;
+using Trailblazers.Backend.Core.Application.Interfaces;
 
 namespace Trailblazers.Backend.WebApi.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
-    public class AdminController(IMediator mediator, IServiceScopeFactory scopeFactory, ILogger<AdminController> logger)
+    public class AdminController(IMediator mediator, IBackgroundTaskQueue taskQueue, ILogger<AdminController> logger)
         : ControllerBase
     {
         [HttpPost("seed-jamb-data")]
@@ -51,27 +52,12 @@ namespace Trailblazers.Backend.WebApi.Controllers
         }
 
         [HttpPost("seed-all-jamb-data")]
-        public IActionResult SeedAllJambData()
+        public async Task<IActionResult> SeedAllJambData()
         {
             logger.LogInformation(
-                "Admin HTTP Request received: POST /api/admin/seed-all-jamb-data. Starting background execution...");
+                "Admin HTTP Request received: POST /api/admin/seed-all-jamb-data. Enqueuing bulk background seeding job...");
 
-            _ = Task.Run(async () =>
-            {
-                using var scope = scopeFactory.CreateScope();
-                try
-                {
-                    // Resolve a fresh instance of Mediator bound to this long-running background scope
-                    var scopedMediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-
-                    await scopedMediator.Send(new SeedAllQuestionsCommand());
-                    logger.LogInformation("System-wide background seeding completed without faults.");
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "System-wide background seeding faulted abruptly.");
-                }
-            });
+            await taskQueue.QueueBackgroundWorkItemAsync(new SeedAllQuestionsCommand());
 
             return Accepted(new { message = "Bulk background JAMB seeding job successfully initiated." });
         }

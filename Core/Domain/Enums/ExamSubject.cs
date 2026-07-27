@@ -2,14 +2,14 @@ namespace Trailblazers.Backend.Core.Domain.Enums
 {
     public enum ExamSubject
     {
-        English = 1,
-        Mathematics = 2,
-        Biology = 3,
-        Chemistry = 4,
-        Physics = 5,
-        Geography = 6,
-        CivicEducation = 7,
-        Government = 8,
+        // English = 1,
+        // Mathematics = 2,
+        // Biology = 3,
+        // Chemistry = 4,
+        // Physics = 5,
+        // Geography = 6,
+        // Government = 8,
+        Civiledu = 7,
         Englishlit = 9,
         Economics = 10,
         Commerce = 11,
@@ -17,8 +17,7 @@ namespace Trailblazers.Backend.Core.Domain.Enums
         Irk = 13,
         History = 14,
         Accounting = 15,
-        Civiledu = 16,
-        Insurance = 17,
-        Currentaffairs = 18,
+        Insurance = 16,
+        Currentaffairs = 17
     }
 }

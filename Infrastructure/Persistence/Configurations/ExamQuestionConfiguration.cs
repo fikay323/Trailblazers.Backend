@@ -54,12 +54,14 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Configurations
                 .IsRequired()
                 .HasColumnName("aloc_id");
 
+            builder.Property(q => q.ExamType)
+                .IsRequired()
+                .HasColumnName("exam_type");
+
             builder.Property(q => q.QuestionNumber)
                 .HasColumnName("question_number");
 
-            builder.HasIndex(q => q.AlocId)
-                .IsUnique()
-                .HasDatabaseName("IX_exam_questions_aloc_id");
+            builder.HasIndex(q => new { q.AlocId, q.ExamType }).IsUnique();
 
             // Composite index on (ExamYear, Subject)
             builder.HasIndex(q => new { q.ExamYear, q.Subject })

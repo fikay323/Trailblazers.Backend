@@ -47,18 +47,24 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions
                     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
                     var apiService = scope.ServiceProvider.GetRequiredService<IJambApiService>();
 
-                    var fetched = (await apiService.FetchQuestionsAsync(subject, year, 40)).ToList();
+                    var fetched = (await apiService.FetchQuestionsAsync(subject, year, 1)).ToList();
 
                     if (fetched.Count > 0)
                     {
                         var fetchedAlocIds = fetched.Select(q => q.AlocId).ToList();
+                        var fetchedExamTypes = fetched.Select(q => q.ExamType).Distinct().ToList();
 
-                        var existingIds = await dbContext.ExamQuestions
-                            .Where(q => fetchedAlocIds.Contains(q.AlocId))
-                            .Select(q => q.AlocId)
+                        var existingPairs = await dbContext.ExamQuestions
+                            .Where(q => fetchedAlocIds.Contains(q.AlocId) && fetchedExamTypes.Contains(q.ExamType))
+                            .Select(q => new { q.AlocId, q.ExamType })
                             .ToListAsync(ct);
 
-                        var newQuestionsToInsert = fetched.Where(q => !existingIds.Contains(q.AlocId)).ToList();
+                        var existingSet = existingPairs.Select(p => (p.AlocId, p.ExamType)).ToHashSet();
+
+                        var newQuestionsToInsert = fetched
+                            .Where(q => !existingSet.Contains((q.AlocId, q.ExamType)))
+                            .DistinctBy(q => new { q.AlocId, q.ExamType })
+                            .ToList();
 
                         if (newQuestionsToInsert.Count > 0)
                         {

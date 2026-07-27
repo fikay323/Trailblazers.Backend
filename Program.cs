@@ -22,7 +22,14 @@ var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING")
                        ?? "Host=localhost;Database=trailblazers_db;Username=postgres;Password=postgres";
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString,
+        npgsqlOptions =>
+        {
+            npgsqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null);
+        }));
 
 // Register CORS
 var allowedOriginsEnv = Environment.GetEnvironmentVariable("ALLOWED_ORIGINS");
@@ -57,6 +64,8 @@ builder.Services.AddScoped<ISubmissionRepository, SubmissionRepository>();
 builder.Services.AddScoped<IExamQuestionRepository, ExamQuestionRepository>();
 builder.Services.AddScoped<IExamSessionRepository, ExamSessionRepository>();
 builder.Services.AddScoped<IMailService, MailService>();
+builder.Services.AddSingleton<IBackgroundTaskQueue, BackgroundTaskQueue>();
+builder.Services.AddHostedService<QueuedHostedService>();
 builder.Services.AddScoped<SubmitContactCommandHandler>();
 builder.Services.AddScoped<SubmitRegistrationCommandHandler>();
 builder.Services.AddScoped<GetSubmissionsQueryHandler>();

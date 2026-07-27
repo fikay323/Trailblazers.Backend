@@ -13,6 +13,7 @@ namespace Trailblazers.Backend.Core.Domain.Entities
         public string? ImageUrl { get; private set; }
         public string? ComprehensionPassage { get; private set; }
         public int AlocId { get; private set; }
+        public string ExamType { get; private set; }
         public int? QuestionNumber { get; private set; }
 
         // Parameterless constructor for EF Core if needed, though domain is pure C#
@@ -20,6 +21,7 @@ namespace Trailblazers.Backend.Core.Domain.Entities
         {
             Options = new Dictionary<char, string>();
             QuestionText = string.Empty;
+            ExamType = string.Empty;
         }
 
         public ExamQuestion(
@@ -30,6 +32,7 @@ namespace Trailblazers.Backend.Core.Domain.Entities
             char correctOption,
             Dictionary<char, string> options,
             int alocId,
+            string examType,
             int? questionNumber = null,
             string? imageUrl = null,
             string? comprehensionPassage = null)
@@ -39,6 +42,9 @@ namespace Trailblazers.Backend.Core.Domain.Entities
 
             if (!Enum.IsDefined(typeof(ExamSubject), subject))
                 throw new ArgumentException("Subject must be a defined ExamSubject.", nameof(subject));
+
+            if (string.IsNullOrWhiteSpace(examType))
+                throw new ArgumentException("Exam type is required.", nameof(examType));
 
             // if (string.IsNullOrWhiteSpace(questionText))
             //     throw new ArgumentException("Question text is required.", nameof(questionText));
@@ -53,6 +59,7 @@ namespace Trailblazers.Backend.Core.Domain.Entities
             CorrectOption = correctOption;
             Options = new Dictionary<char, string>(options);
             AlocId = alocId;
+            ExamType = examType.Trim().ToLowerInvariant();
             QuestionNumber = questionNumber;
             ImageUrl = imageUrl;
             ComprehensionPassage = comprehensionPassage;

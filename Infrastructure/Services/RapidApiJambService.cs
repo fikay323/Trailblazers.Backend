@@ -47,6 +47,8 @@ namespace Trailblazers.Backend.Infrastructure.Services
 
                 var apiResult = await response.Content.ReadFromJsonAsync<AlocApiResponse>();
 
+                logger.LogInformation("API Result Message: {Message}", apiResult?.Message);
+
                 if (apiResult?.Data == null)
                 {
                     logger.LogWarning(
@@ -102,6 +104,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
                         correctOption,
                         options,
                         dto.Id,
+                        string.IsNullOrWhiteSpace(dto.Examtype) ? "utme" : dto.Examtype,
                         dto.QuestionNub,
                         imageUrl: string.IsNullOrWhiteSpace(dto.Image) ? null : dto.Image.Trim(),
                         comprehensionPassage: passage
@@ -142,6 +145,8 @@ namespace Trailblazers.Backend.Infrastructure.Services
             [JsonPropertyName("section")] public string? Section { get; set; }
 
             [JsonPropertyName("image")] public string? Image { get; set; }
+
+            [JsonPropertyName("examtype")] public string? Examtype { get; set; }
         }
 
         private class AlocOptionsDto

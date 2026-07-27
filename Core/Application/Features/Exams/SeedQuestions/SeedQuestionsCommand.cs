@@ -44,8 +44,9 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions
             }
 
             // 2. Check if questions for this subject/year combination already exist to avoid duplicates
+            var fetchedExamTypes = fetchedQuestions.Select(q => q.ExamType).Distinct().ToList();
             var exists = await dbContext.ExamQuestions
-                .AnyAsync(q => q.Subject == subjectEnum && q.ExamYear == request.Year,
+                .AnyAsync(q => q.Subject == subjectEnum && q.ExamYear == request.Year && fetchedExamTypes.Contains(q.ExamType),
                     cancellationToken);
 
             if (exists)
