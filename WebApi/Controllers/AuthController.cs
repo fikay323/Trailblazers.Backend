@@ -59,6 +59,8 @@ namespace Trailblazers.Backend.WebApi.Controllers
             dbContext.RefreshTokens.Add(refreshToken);
             await dbContext.SaveChangesAsync();
 
+            AppendAuthCookies(token, refreshToken.Token);
+
             logger.LogInformation("New student registered: {Email}", user.Email);
 
             return Created(string.Empty, new AuthResponseDto
@@ -103,6 +105,8 @@ namespace Trailblazers.Backend.WebApi.Controllers
 
             dbContext.RefreshTokens.Add(refreshToken);
             await dbContext.SaveChangesAsync();
+
+            AppendAuthCookies(token, refreshToken.Token);
 
             logger.LogInformation("User logged in: {Email} (Active: {IsActive})", user.Email, user.IsActive);
 
@@ -150,6 +154,8 @@ namespace Trailblazers.Backend.WebApi.Controllers
 
             var token = jwtTokenService.GenerateAccessToken(user, roles);
 
+            AppendAuthCookies(token, newRefreshToken.Token);
+
             return Ok(new AuthResponseDto
             {
                 Token = token,
@@ -164,6 +170,69 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     DisabledReason = user.DisabledReason
                 }
             });
+        }
+
+        [HttpPost("logout")]
+        public IActionResult Logout()
+        {
+            ClearAuthCookies();
+            return Ok(new { message = "Logged out successfully." });
+        }
+
+        private void AppendAuthCookies(string token, string refreshToken)
+        {
+            var cookieDomain = Environment.GetEnvironmentVariable("COOKIE_DOMAIN");
+            var isSecure = !string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase);
+
+            var authCookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = isSecure,
+                SameSite = SameSiteMode.Lax,
+                Path = "/",
+                Expires = DateTimeOffset.UtcNow.AddHours(2)
+            };
+
+            var refreshCookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = isSecure,
+                SameSite = SameSiteMode.Lax,
+                Path = "/",
+                Expires = DateTimeOffset.UtcNow.AddDays(7)
+            };
+
+            if (!string.IsNullOrWhiteSpace(cookieDomain))
+            {
+                authCookieOptions.Domain = cookieDomain;
+                refreshCookieOptions.Domain = cookieDomain;
+            }
+
+            Response.Cookies.Append("auth_token", token, authCookieOptions);
+            Response.Cookies.Append("refresh_token", refreshToken, refreshCookieOptions);
+        }
+
+        private void ClearAuthCookies()
+        {
+            var cookieDomain = Environment.GetEnvironmentVariable("COOKIE_DOMAIN");
+            var isSecure = !string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase);
+
+            var cookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = isSecure,
+                SameSite = SameSiteMode.Lax,
+                Path = "/",
+                Expires = DateTimeOffset.UtcNow.AddDays(-1)
+            };
+
+            if (!string.IsNullOrWhiteSpace(cookieDomain))
+            {
+                cookieOptions.Domain = cookieDomain;
+            }
+
+            Response.Cookies.Append("auth_token", string.Empty, cookieOptions);
+            Response.Cookies.Append("refresh_token", string.Empty, cookieOptions);
         }
 
         [HttpGet("me")]

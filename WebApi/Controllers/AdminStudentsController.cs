@@ -59,6 +59,11 @@ namespace Trailblazers.Backend.WebApi.Controllers
             Guid id,
             [FromBody] UpdateStudentStatusRequestDto request)
         {
+            if (User.Identity?.IsAuthenticated == true && !User.IsInRole("Admin"))
+            {
+                return StatusCode(403, new { error = "Access denied: Only Administrators can modify student account fee status." });
+            }
+
             var user = await userManager.FindByIdAsync(id.ToString());
             if (user == null)
             {

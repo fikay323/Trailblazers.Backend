@@ -80,22 +80,45 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtAudience,
         ClockSkew = TimeSpan.Zero
     };
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            // If Authorization header is absent, look for HTTP-Only cookie 'auth_token'
+            if (string.IsNullOrEmpty(context.Token) && context.Request.Cookies.TryGetValue("auth_token", out var cookieToken))
+            {
+                context.Token = cookieToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
 });
 
-// Register CORS
-var allowedOriginsEnv = Environment.GetEnvironmentVariable("ALLOWED_ORIGINS");
-var allowedOrigins = !string.IsNullOrWhiteSpace(allowedOriginsEnv)
-    ? allowedOriginsEnv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-    : ["http://localhost:3000"];
-
+// Register CORS for multi-subdomain support
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("CorsPolicy", policy =>
     {
-        policy.WithOrigins(allowedOrigins)
-            .AllowAnyMethod()
-            .AllowAnyHeader()
-            .AllowCredentials();
+        policy.SetIsOriginAllowed(origin =>
+        {
+            if (string.IsNullOrWhiteSpace(origin)) return false;
+            try
+            {
+                var uri = new Uri(origin);
+                var host = uri.Host.ToLowerInvariant();
+                return host == "localhost"
+                    || host.EndsWith(".localhost")
+                    || host == "trailblazer-academy.com"
+                    || host.EndsWith(".trailblazer-academy.com");
+            }
+            catch
+            {
+                return false;
+            }
+        })
+        .AllowAnyMethod()
+        .AllowAnyHeader()
+        .AllowCredentials();
     });
 });
 
