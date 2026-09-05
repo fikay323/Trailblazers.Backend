@@ -7,6 +7,7 @@ using Trailblazers.Backend.Core.Domain.Repositories;
 using Trailblazers.Backend.Infrastructure.Persistence;
 using Trailblazers.Backend.Infrastructure.Persistence.Repositories;
 using Trailblazers.Backend.Infrastructure.Services;
+using Trailblazers.Backend.WebApi.Authentication;
 
 DotNetEnv.Env.Load();
 
@@ -69,6 +70,7 @@ builder.Services.AddHostedService<QueuedHostedService>();
 builder.Services.AddScoped<SubmitContactCommandHandler>();
 builder.Services.AddScoped<SubmitRegistrationCommandHandler>();
 builder.Services.AddScoped<GetSubmissionsQueryHandler>();
+builder.Services.AddScoped<ApiKeyAuthFilter>();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>(
         customTestQuery: async (context, cancellationToken) =>

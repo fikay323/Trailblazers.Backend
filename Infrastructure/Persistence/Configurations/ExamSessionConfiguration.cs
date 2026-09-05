@@ -39,6 +39,12 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Configurations
             builder.Property(s => s.Score)
                 .HasColumnName("score");
 
+            builder.Property(s => s.AssignedQuestionIds)
+                .IsRequired()
+                .HasColumnName("assigned_question_ids")
+                .HasColumnType("uuid[]")
+                .HasDefaultValueSql("ARRAY[]::uuid[]");
+
             // Configure owned collection Answers mapped to student_answers table
             builder.OwnsMany(s => s.Answers, a =>
             {

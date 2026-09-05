@@ -28,8 +28,22 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SubmitExam
                 throw new ValidationException($"Exam session with ID {request.SessionId} was not found.");
             }
 
+            // Handle idempotency: if already submitted, return the existing score rather than failing
             if (session.IsCompleted)
             {
+                var existingResult = await sessionRepository.GetResultBySessionIdAsync(session.Id);
+                if (existingResult != null)
+                {
+                    var totalAssigned = session.AssignedQuestionIds.Count > 0
+                        ? session.AssignedQuestionIds.Count
+                        : session.Answers.Count;
+
+                    return new ExamSubmitResponseDto(
+                        Score: existingResult.TotalScore,
+                        TotalQuestions: totalAssigned,
+                        CompletedAt: existingResult.CompletedAt
+                    );
+                }
                 throw new ValidationException("This exam session has already been completed and submitted.");
             }
 
@@ -40,15 +54,21 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SubmitExam
                 throw new ValidationException("The submission window for this session has closed.");
             }
 
-            // 3. Fetch the relevant ExamQuestion entities based on the question IDs submitted
-            var questionIds = request.StudentAnswers.Keys.ToList();
-            var questions = (await questionRepository.GetByIdsAsync(questionIds)).ToList();
+            // 3. Determine questions to grade: bind strictly to assigned questions to prevent spoofing
+            var assignedIds = session.AssignedQuestionIds.Count > 0
+                ? session.AssignedQuestionIds
+                : request.StudentAnswers.Keys.ToList();
+
+            var questions = (await questionRepository.GetByIdsAsync(assignedIds)).ToList();
+            var validSubmittedAnswers = request.StudentAnswers
+                .Where(kvp => assignedIds.Contains(kvp.Key))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
             // 4. Compare the student's selected options against CorrectOption to calculate the score
             int calculatedScore = 0;
             foreach (var question in questions)
             {
-                if (request.StudentAnswers.TryGetValue(question.Id, out var selectedOption))
+                if (validSubmittedAnswers.TryGetValue(question.Id, out var selectedOption))
                 {
                     // Case-insensitive comparison is safer for option characters
                     if (char.ToUpperInvariant(selectedOption) == char.ToUpperInvariant(question.CorrectOption))
@@ -60,7 +80,7 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SubmitExam
 
             // 5. Populate student answers in the session
             session.Answers.Clear();
-            foreach (var kvp in request.StudentAnswers)
+            foreach (var kvp in validSubmittedAnswers)
             {
                 session.Answers.Add(new StudentAnswer(kvp.Key, kvp.Value));
             }
@@ -81,9 +101,11 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SubmitExam
             // 8. Save the changes via the repository
             await sessionRepository.UpdateAsync(session);
 
+            int totalDenominator = assignedIds.Count > 0 ? assignedIds.Count : questions.Count;
+
             return new ExamSubmitResponseDto(
                 Score: calculatedScore,
-                TotalQuestions: questions.Count,
+                TotalQuestions: totalDenominator,
                 CompletedAt: examResult.CompletedAt
             );
         }

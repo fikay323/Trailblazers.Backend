@@ -9,11 +9,13 @@ namespace Trailblazers.Backend.Core.Domain.Entities
         public DateTimeOffset EndTime { get; private set; }
         public bool IsCompleted { get; private set; }
         public int? Score { get; private set; }
+        public List<Guid> AssignedQuestionIds { get; private set; }
         public List<StudentAnswer> Answers { get; private set; }
 
         private ExamSession()
         {
             StudentEmail = string.Empty;
+            AssignedQuestionIds = [];
             Answers = [];
         }
 
@@ -23,6 +25,7 @@ namespace Trailblazers.Backend.Core.Domain.Entities
             int targetYear,
             DateTimeOffset startTime,
             DateTimeOffset endTime,
+            List<Guid>? assignedQuestionIds = null,
             List<StudentAnswer>? answers = null)
         {
             if (id == Guid.Empty)
@@ -41,6 +44,7 @@ namespace Trailblazers.Backend.Core.Domain.Entities
             EndTime = endTime;
             IsCompleted = false;
             Score = null;
+            AssignedQuestionIds = assignedQuestionIds ?? [];
             Answers = answers ?? [];
         }
 

@@ -2,11 +2,13 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions;
 using Trailblazers.Backend.Core.Application.Interfaces;
+using Trailblazers.Backend.WebApi.Authentication;
 
 namespace Trailblazers.Backend.WebApi.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [ServiceFilter(typeof(ApiKeyAuthFilter))]
     public class AdminController(IMediator mediator, IBackgroundTaskQueue taskQueue, ILogger<AdminController> logger)
         : ControllerBase
     {

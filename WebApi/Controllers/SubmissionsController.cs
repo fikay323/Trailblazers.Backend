@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Trailblazers.Backend.Core.Domain.Entities;
 using Trailblazers.Backend.Core.Application.Submissions.Commands;
 using Trailblazers.Backend.Core.Application.Submissions.Queries;
+using Trailblazers.Backend.WebApi.Authentication;
 
 namespace Trailblazers.Backend.WebApi.Controllers
 {
@@ -54,6 +55,7 @@ namespace Trailblazers.Backend.WebApi.Controllers
         }
 
         [HttpGet]
+        [ServiceFilter(typeof(ApiKeyAuthFilter))]
         public async Task<IActionResult> GetSubmissions(
             [FromQuery] SubmissionType? type,
             [FromQuery] string? searchTerm,
@@ -63,13 +65,6 @@ namespace Trailblazers.Backend.WebApi.Controllers
             [FromQuery] int pageSize = 10,
             CancellationToken cancellationToken = default)
         {
-            var expectedApiKey = Environment.GetEnvironmentVariable("ADMIN_API_KEY") ?? "trailblazers-secret-key";
-            if (!Request.Headers.TryGetValue("X-API-KEY", out var extractedApiKey) || extractedApiKey != expectedApiKey)
-            {
-                return Unauthorized(new
-                    { error = "Unauthorized access to submissions. A valid X-API-KEY header is required." });
-            }
-
             try
             {
                 var query = new GetSubmissionsQuery(

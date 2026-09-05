@@ -3,6 +3,7 @@ using System.Text.Json;
 using Trailblazers.Backend.Core.Domain.Entities;
 using Trailblazers.Backend.Core.Domain.Repositories;
 using Trailblazers.Backend.Core.Application.Interfaces;
+using Trailblazers.Backend.Core.Application.Common.Commands;
 
 namespace Trailblazers.Backend.Core.Application.Submissions.Commands
 {
@@ -14,7 +15,7 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
 
     public class SubmitContactCommandHandler(
         ISubmissionRepository repository,
-        IMailService mailService,
+        IBackgroundTaskQueue taskQueue,
         ILogger<SubmitContactCommandHandler> logger)
     {
         public async Task<Submission> HandleAsync(SubmitContactCommand command,
@@ -37,24 +38,12 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
             await repository.SaveChangesAsync(cancellationToken);
 
             var adminEmail = Environment.GetEnvironmentVariable("SMTP_ADMIN_EMAIL") ?? "admin@trailblazers.com";
+            var body = $"New contact submission received:\n\n" +
+                       $"Name: {submission.Name}\n" +
+                       $"Email: {submission.Email}\n" +
+                       $"Message: {command.Message}\n";
 
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    var body = $"New contact submission received:\n\n" +
-                               $"Name: {submission.Name}\n" +
-                               $"Email: {submission.Email}\n" +
-                               $"Message: {command.Message}\n";
-
-                    await mailService.SendEmailAsync(adminEmail, "New Contact Inquiry", body);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Error sending admin notification email for contact submission {SubmissionId}",
-                        submission.Id);
-                }
-            }, CancellationToken.None);
+            await taskQueue.QueueBackgroundWorkItemAsync(new SendEmailCommand(adminEmail, "New Contact Inquiry", body));
 
             return submission;
         }

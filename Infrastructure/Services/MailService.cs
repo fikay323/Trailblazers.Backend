@@ -33,8 +33,18 @@ namespace Trailblazers.Backend.Infrastructure.Services
             using var client = new SmtpClient();
             try
             {
-                // Accept all SSL certificates if using self-signed certs (useful for local SMTP test servers like Mailpit/Maildev)
-                client.ServerCertificateValidationCallback = (s, c, h, e) => true;
+                // Strictly enforce TLS certificate validation in production.
+                // Only bypass if explicitly requested for local dev test servers (e.g. Mailpit/Maildev)
+                var allowInvalidCert = string.Equals(
+                    Environment.GetEnvironmentVariable("SMTP_ALLOW_INVALID_CERT"),
+                    "true",
+                    StringComparison.OrdinalIgnoreCase);
+
+                if (allowInvalidCert)
+                {
+                    logger.LogWarning("SECURITY WARNING: SMTP TLS certificate validation is disabled via SMTP_ALLOW_INVALID_CERT=true.");
+                    client.ServerCertificateValidationCallback = (s, c, h, e) => true;
+                }
 
                 // Determine secure socket options
                 var secureOptions = SecureSocketOptions.Auto;

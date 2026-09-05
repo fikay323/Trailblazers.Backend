@@ -3,6 +3,7 @@ using System.Text.Json;
 using Trailblazers.Backend.Core.Domain.Entities;
 using Trailblazers.Backend.Core.Domain.Repositories;
 using Trailblazers.Backend.Core.Application.Interfaces;
+using Trailblazers.Backend.Core.Application.Common.Commands;
 
 namespace Trailblazers.Backend.Core.Application.Submissions.Commands
 {
@@ -10,12 +11,21 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
         string Name,
         string Email,
         string PhoneNumber,
-        string TargetExam
+        string TargetExam,
+        string? DateOfBirth = null,
+        string? Gender = null,
+        string? Address = null,
+        string? LastSchool = null,
+        string? ClassCompleted = null,
+        string? SubjectCombination = null,
+        string? ClassMode = null,
+        string? Referral = null,
+        List<string>? Programmes = null
     );
 
     public class SubmitRegistrationCommandHandler(
         ISubmissionRepository repository,
-        IMailService mailService,
+        IBackgroundTaskQueue taskQueue,
         ILogger<SubmitRegistrationCommandHandler> logger)
     {
         public async Task<Submission> HandleAsync(SubmitRegistrationCommand command,
@@ -26,7 +36,16 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
             var metadataJson = JsonSerializer.Serialize(new
             {
                 PhoneNumber = command.PhoneNumber.Trim(),
-                TargetExam = command.TargetExam.Trim()
+                TargetExam = command.TargetExam.Trim(),
+                DateOfBirth = command.DateOfBirth?.Trim() ?? string.Empty,
+                Gender = command.Gender?.Trim() ?? string.Empty,
+                Address = command.Address?.Trim() ?? string.Empty,
+                LastSchool = command.LastSchool?.Trim() ?? string.Empty,
+                ClassCompleted = command.ClassCompleted?.Trim() ?? string.Empty,
+                SubjectCombination = command.SubjectCombination?.Trim() ?? string.Empty,
+                ClassMode = command.ClassMode?.Trim() ?? string.Empty,
+                Referral = command.Referral?.Trim() ?? string.Empty,
+                Programmes = command.Programmes ?? []
             });
 
             var submission = new Submission
@@ -41,25 +60,16 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
             await repository.AddAsync(submission, cancellationToken);
             await repository.SaveChangesAsync(cancellationToken);
 
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    var body = $"Dear {submission.Name},\n\n" +
-                               $"Thank you for registering for the {command.TargetExam} preparation program with Trailblazers!\n" +
-                               $"We have received your details (Phone: {command.PhoneNumber}) and will get back to you shortly.\n\n" +
-                               $"Best regards,\n" +
-                               $"The Trailblazers Team";
+            var body = $"Dear {submission.Name},\n\n" +
+                       $"Thank you for registering for the {command.TargetExam} preparation program with Trailblazers!\n" +
+                       $"We have received your details (Phone: {command.PhoneNumber}) and will get back to you shortly.\n\n" +
+                       $"Best regards,\n" +
+                       $"The Trailblazers Team";
 
-                    await mailService.SendEmailAsync(submission.Email,
-                        $"Welcome to Trailblazers - {command.TargetExam} Registration", body);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Error sending student welcome email for registration {SubmissionId}",
-                        submission.Id);
-                }
-            }, CancellationToken.None);
+            await taskQueue.QueueBackgroundWorkItemAsync(new SendEmailCommand(
+                submission.Email,
+                $"Welcome to Trailblazers - {command.TargetExam} Registration",
+                body));
 
             return submission;
         }

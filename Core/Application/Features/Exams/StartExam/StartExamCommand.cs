@@ -37,12 +37,15 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.StartExam
             var startTime = DateTimeOffset.UtcNow;
             var endTime = startTime.AddMinutes(120);
 
+            var assignedQuestionIds = questionsList.Select(q => q.Id).ToList();
+
             var session = new ExamSession(
                 sessionId,
                 request.StudentEmail,
                 request.Year,
                 startTime,
-                endTime
+                endTime,
+                assignedQuestionIds: assignedQuestionIds
             );
 
             // 3. Save the session

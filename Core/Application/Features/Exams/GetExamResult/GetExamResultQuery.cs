@@ -36,27 +36,30 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.GetExamResult
 
             var session = result.Session;
             var answers = session.Answers ?? [];
-            var questionIds = answers.Select(a => a.QuestionId).ToList();
+            var answersMap = answers.ToDictionary(a => a.QuestionId, a => a.SelectedOption);
+
+            var questionIds = (session.AssignedQuestionIds != null && session.AssignedQuestionIds.Count > 0)
+                ? session.AssignedQuestionIds
+                : answers.Select(a => a.QuestionId).ToList();
 
             var questions = (await questionRepository.GetByIdsAsync(questionIds)).ToList();
-            var questionsMap = questions.ToDictionary(q => q.Id);
 
-            // Map review questions
+            // Map review questions (preserving order of assigned questions)
             var reviewQuestions = new List<ReviewQuestionDto>();
-            foreach (var answer in answers)
+            foreach (var question in questions)
             {
-                if (questionsMap.TryGetValue(answer.QuestionId, out var question))
-                {
-                    reviewQuestions.Add(new ReviewQuestionDto(
-                        Id: question.Id,
-                        Subject: question.Subject.ToString(),
-                        QuestionText: question.QuestionText,
-                        Options: question.Options,
-                        SelectedOption: answer.SelectedOption == '-' ? null : answer.SelectedOption.ToString(),
-                        CorrectOption: question.CorrectOption.ToString(),
-                        ComprehensionPassage: question.ComprehensionPassage
-                    ));
-                }
+                answersMap.TryGetValue(question.Id, out var selectedChar);
+                string? selectedStr = (selectedChar == '\0' || selectedChar == '-') ? null : selectedChar.ToString();
+
+                reviewQuestions.Add(new ReviewQuestionDto(
+                    Id: question.Id,
+                    Subject: question.Subject.ToString(),
+                    QuestionText: question.QuestionText,
+                    Options: question.Options,
+                    SelectedOption: selectedStr,
+                    CorrectOption: question.CorrectOption.ToString(),
+                    ComprehensionPassage: question.ComprehensionPassage
+                ));
             }
 
             // Map subject performance
@@ -71,12 +74,16 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.GetExamResult
 
             double elapsedTimeSeconds = (result.CompletedAt - session.StartTime).TotalSeconds;
 
+            int totalQuestionsCount = (session.AssignedQuestionIds != null && session.AssignedQuestionIds.Count > 0)
+                ? session.AssignedQuestionIds.Count
+                : questions.Count;
+
             return new ExamResultResponseDto(
                 SessionId: session.Id,
                 StudentEmail: session.StudentEmail,
                 TargetYear: session.TargetYear,
                 OverallScore: result.TotalScore,
-                TotalQuestions: questions.Count,
+                TotalQuestions: totalQuestionsCount,
                 CompletedAt: result.CompletedAt,
                 ElapsedTimeSeconds: elapsedTimeSeconds,
                 SubjectPerformance: subjectPerformance,
