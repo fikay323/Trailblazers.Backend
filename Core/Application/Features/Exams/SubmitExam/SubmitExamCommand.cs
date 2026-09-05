@@ -94,19 +94,15 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SubmitExam
                 completedAt: DateTimeOffset.UtcNow
             );
 
-            // 7. Add result to the context and mark session as Completed
-            await sessionRepository.AddResultAsync(examResult);
-            session.Complete();
-
-            // 8. Save the changes via the repository
-            await sessionRepository.UpdateAsync(session);
+            // 7. Atomically complete session and save result with optimistic concurrency protection
+            var savedResult = await sessionRepository.CompleteAndSaveResultAsync(session, examResult, cancellationToken);
 
             int totalDenominator = assignedIds.Count > 0 ? assignedIds.Count : questions.Count;
 
             return new ExamSubmitResponseDto(
-                Score: calculatedScore,
+                Score: savedResult.TotalScore,
                 TotalQuestions: totalDenominator,
-                CompletedAt: examResult.CompletedAt
+                CompletedAt: savedResult.CompletedAt
             );
         }
     }

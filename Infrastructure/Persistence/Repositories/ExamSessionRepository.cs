@@ -40,5 +40,47 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
                 .ThenInclude(s => s!.Answers)
                 .FirstOrDefaultAsync(r => r.SessionId == sessionId);
         }
+
+        public async Task<ExamResult> CompleteAndSaveResultAsync(ExamSession session, ExamResult result, CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(session);
+            ArgumentNullException.ThrowIfNull(result);
+
+            session.Complete();
+
+            try
+            {
+                await context.ExamResults.AddAsync(result, cancellationToken);
+                context.ExamSessions.Update(session);
+                await context.SaveChangesAsync(cancellationToken);
+                return result;
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Concurrency conflict: another concurrent request completed this session
+                context.Entry(result).State = EntityState.Detached;
+                context.Entry(session).State = EntityState.Detached;
+
+                var existingResult = await GetResultBySessionIdAsync(session.Id);
+                if (existingResult != null)
+                {
+                    return existingResult;
+                }
+                throw;
+            }
+            catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("IX_exam_results_session_id") == true ||
+                                              ex.InnerException?.Message.Contains("duplicate key") == true)
+            {
+                context.Entry(result).State = EntityState.Detached;
+                context.Entry(session).State = EntityState.Detached;
+
+                var existingResult = await GetResultBySessionIdAsync(session.Id);
+                if (existingResult != null)
+                {
+                    return existingResult;
+                }
+                throw;
+            }
+        }
     }
 }

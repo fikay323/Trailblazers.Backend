@@ -12,6 +12,12 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Configurations
 
             builder.HasKey(s => s.Id);
 
+            // Enable PostgreSQL xmin optimistic concurrency token
+            builder.Property<uint>("xmin")
+                .HasColumnType("xid")
+                .ValueGeneratedOnAddOrUpdate()
+                .IsRowVersion();
+
             builder.Property(s => s.Id)
                 .HasColumnName("id");
 

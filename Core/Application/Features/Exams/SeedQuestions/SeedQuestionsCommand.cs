@@ -1,8 +1,6 @@
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 using Trailblazers.Backend.Core.Application.Interfaces;
 using Trailblazers.Backend.Core.Domain.Enums;
-using Trailblazers.Backend.Infrastructure.Persistence;
 
 namespace Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions
 {
@@ -14,7 +12,7 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions
 
     public class SeedQuestionsCommandHandler(
         IJambApiService apiService,
-        ApplicationDbContext dbContext,
+        IExamQuestionRepository questionRepository,
         ILogger<SeedQuestionsCommandHandler> logger)
         : IRequestHandler<SeedQuestionsCommand, int>
     {
@@ -45,9 +43,7 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions
 
             // 2. Check if questions for this subject/year combination already exist to avoid duplicates
             var fetchedExamTypes = fetchedQuestions.Select(q => q.ExamType).Distinct().ToList();
-            var exists = await dbContext.ExamQuestions
-                .AnyAsync(q => q.Subject == subjectEnum && q.ExamYear == request.Year && fetchedExamTypes.Contains(q.ExamType),
-                    cancellationToken);
+            var exists = await questionRepository.ExistsAsync(subjectEnum, request.Year, fetchedExamTypes, cancellationToken);
 
             if (exists)
             {
@@ -61,8 +57,7 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions
             logger.LogInformation(
                 "Batch inserting {Count} questions into database for Subject: {Subject}, Year: {Year}...",
                 fetchedQuestions.Count, request.Subject, request.Year);
-            await dbContext.ExamQuestions.AddRangeAsync(fetchedQuestions, cancellationToken);
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await questionRepository.AddRangeAsync(fetchedQuestions, cancellationToken);
 
             logger.LogInformation("Successfully persisted {Count} seeded questions into PostgreSQL.",
                 fetchedQuestions.Count);

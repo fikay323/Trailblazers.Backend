@@ -9,5 +9,6 @@ namespace Trailblazers.Backend.Core.Application.Interfaces
         Task UpdateAsync(ExamSession session);
         Task AddResultAsync(ExamResult result);
         Task<ExamResult?> GetResultBySessionIdAsync(Guid sessionId);
+        Task<ExamResult> CompleteAndSaveResultAsync(ExamSession session, ExamResult result, CancellationToken cancellationToken = default);
     }
 }

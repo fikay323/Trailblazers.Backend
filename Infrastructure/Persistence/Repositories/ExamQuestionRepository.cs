@@ -21,33 +21,33 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
                 }
             }
 
-            var allQuestions = await context.ExamQuestions
-                .AsNoTracking()
-                .Where(q => q.ExamYear == year && subjectsEnumList.Contains(q.Subject))
-                .ToListAsync();
-
             var finalQuestions = new List<ExamQuestion>();
             foreach (var subject in subjectsEnumList)
             {
                 var threshold = subject == ExamSubject.English ? 50 : 40;
-                var targetYearSubjectQuestions = allQuestions.Where(q => q.Subject == subject).ToList();
-                var primaryQuestions = targetYearSubjectQuestions.OrderBy(_ => Random.Shared.Next()).Take(threshold)
-                    .ToList();
+
+                // Sample primary questions directly in PostgreSQL using RANDOM()
+                var primaryQuestions = await context.ExamQuestions
+                    .AsNoTracking()
+                    .Where(q => q.Subject == subject && q.ExamYear == year)
+                    .OrderBy(_ => EF.Functions.Random())
+                    .Take(threshold)
+                    .ToListAsync();
 
                 if (primaryQuestions.Count < threshold)
                 {
                     var deficit = threshold - primaryQuestions.Count;
+                    var primaryIds = primaryQuestions.Select(q => q.Id).ToList();
+
+                    // Sample backfill questions directly in PostgreSQL using RANDOM() without loading the entire DB table
                     var backfillQuestions = await context.ExamQuestions
                         .AsNoTracking()
-                        .Where(q => q.Subject == subject && q.ExamYear != year)
+                        .Where(q => q.Subject == subject && q.ExamYear != year && !primaryIds.Contains(q.Id))
+                        .OrderBy(_ => EF.Functions.Random())
+                        .Take(deficit)
                         .ToListAsync();
 
-                    var additionalQuestions = backfillQuestions
-                        .OrderBy(_ => Random.Shared.Next())
-                        .Take(deficit)
-                        .ToList();
-
-                    primaryQuestions.AddRange(additionalQuestions);
+                    primaryQuestions.AddRange(backfillQuestions);
                 }
 
                 finalQuestions.AddRange(primaryQuestions);
@@ -62,6 +62,37 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
                 .AsNoTracking()
                 .Where(q => ids.Contains(q.Id))
                 .ToListAsync();
+        }
+
+        public async Task<bool> ExistsAsync(ExamSubject subject, int year, IEnumerable<string> examTypes, CancellationToken cancellationToken = default)
+        {
+            var typesList = examTypes.ToList();
+            return await context.ExamQuestions
+                .AnyAsync(q => q.Subject == subject && q.ExamYear == year && typesList.Contains(q.ExamType),
+                    cancellationToken);
+        }
+
+        public async Task<int> AddRangeAsync(IEnumerable<ExamQuestion> questions, CancellationToken cancellationToken = default)
+        {
+            var list = questions.ToList();
+            if (list.Count == 0) return 0;
+
+            await context.ExamQuestions.AddRangeAsync(list, cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
+            return list.Count;
+        }
+
+        public async Task<HashSet<(int AlocId, string ExamType)>> GetExistingAlocPairsAsync(IEnumerable<int> alocIds, IEnumerable<string> examTypes, CancellationToken cancellationToken = default)
+        {
+            var alocList = alocIds.ToList();
+            var typesList = examTypes.Distinct().ToList();
+
+            var pairs = await context.ExamQuestions
+                .Where(q => alocList.Contains(q.AlocId) && typesList.Contains(q.ExamType))
+                .Select(q => new { q.AlocId, q.ExamType })
+                .ToListAsync(cancellationToken);
+
+            return pairs.Select(p => (p.AlocId, p.ExamType)).ToHashSet();
         }
     }
 }

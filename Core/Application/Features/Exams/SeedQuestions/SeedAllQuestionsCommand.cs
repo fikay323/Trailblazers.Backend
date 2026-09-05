@@ -1,8 +1,6 @@
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 using Trailblazers.Backend.Core.Application.Interfaces;
 using Trailblazers.Backend.Core.Domain.Enums;
-using Trailblazers.Backend.Infrastructure.Persistence;
 
 namespace Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions
 {
@@ -44,7 +42,7 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions
                 try
                 {
                     using var scope = scopeFactory.CreateScope();
-                    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+                    var questionRepository = scope.ServiceProvider.GetRequiredService<IExamQuestionRepository>();
                     var apiService = scope.ServiceProvider.GetRequiredService<IJambApiService>();
 
                     var fetched = (await apiService.FetchQuestionsAsync(subject, year, 1)).ToList();
@@ -54,12 +52,7 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions
                         var fetchedAlocIds = fetched.Select(q => q.AlocId).ToList();
                         var fetchedExamTypes = fetched.Select(q => q.ExamType).Distinct().ToList();
 
-                        var existingPairs = await dbContext.ExamQuestions
-                            .Where(q => fetchedAlocIds.Contains(q.AlocId) && fetchedExamTypes.Contains(q.ExamType))
-                            .Select(q => new { q.AlocId, q.ExamType })
-                            .ToListAsync(ct);
-
-                        var existingSet = existingPairs.Select(p => (p.AlocId, p.ExamType)).ToHashSet();
+                        var existingSet = await questionRepository.GetExistingAlocPairsAsync(fetchedAlocIds, fetchedExamTypes, ct);
 
                         var newQuestionsToInsert = fetched
                             .Where(q => !existingSet.Contains((q.AlocId, q.ExamType)))
@@ -72,8 +65,7 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.SeedQuestions
                                 "Found {NewCount} new questions out of {TotalFetched} fetched for {Subject} ({Year}). Batch inserting...",
                                 newQuestionsToInsert.Count, fetched.Count, subject, year);
 
-                            await dbContext.ExamQuestions.AddRangeAsync(newQuestionsToInsert, ct);
-                            await dbContext.SaveChangesAsync(ct);
+                            await questionRepository.AddRangeAsync(newQuestionsToInsert, ct);
 
                             logger.LogInformation("Seeded questions for {Subject} ({Year}) successfully.", subject,
                                 year);
