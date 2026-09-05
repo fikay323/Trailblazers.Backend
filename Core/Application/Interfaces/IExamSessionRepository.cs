@@ -10,5 +10,7 @@ namespace Trailblazers.Backend.Core.Application.Interfaces
         Task AddResultAsync(ExamResult result);
         Task<ExamResult?> GetResultBySessionIdAsync(Guid sessionId);
         Task<ExamResult> CompleteAndSaveResultAsync(ExamSession session, ExamResult result, CancellationToken cancellationToken = default);
+        Task<IEnumerable<ExamResult>> GetResultsByStudentEmailAsync(string studentEmail, CancellationToken cancellationToken = default);
+        Task<IEnumerable<ExamResult>> GetAllResultsAsync(CancellationToken cancellationToken = default);
     }
 }

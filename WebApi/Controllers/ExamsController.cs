@@ -36,6 +36,14 @@ namespace Trailblazers.Backend.WebApi.Controllers
                 var result = await mediator.Send(command, cancellationToken);
                 return Ok(result);
             }
+            catch (ValidationException ex)
+            {
+                return StatusCode(403, new { error = ex.Message });
+            }
+            catch (NotFoundException ex)
+            {
+                return NotFound(new { error = ex.Message });
+            }
             catch (ArgumentException ex)
             {
                 return BadRequest(new { error = ex.Message });

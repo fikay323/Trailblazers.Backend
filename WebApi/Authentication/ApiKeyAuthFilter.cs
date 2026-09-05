@@ -12,6 +12,14 @@ namespace Trailblazers.Backend.WebApi.Authentication
 
         public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
+            // Allow authenticated users with Admin or Instructor role
+            if (context.HttpContext.User.Identity?.IsAuthenticated == true &&
+                (context.HttpContext.User.IsInRole("Admin") || context.HttpContext.User.IsInRole("Instructor")))
+            {
+                await next();
+                return;
+            }
+
             var expectedApiKey = Environment.GetEnvironmentVariable(ApiKeyConfigKey)
                                  ?? configuration[ApiKeyConfigKey]
                                  ?? "trailblazers-secret-key";
@@ -19,12 +27,12 @@ namespace Trailblazers.Backend.WebApi.Authentication
             if (!context.HttpContext.Request.Headers.TryGetValue(ApiKeyHeaderName, out var extractedApiKey)
                 || string.IsNullOrWhiteSpace(extractedApiKey))
             {
-                logger.LogWarning("Access denied: Missing {HeaderName} header on endpoint {Path}.",
+                logger.LogWarning("Access denied: Missing {HeaderName} or Admin authorization on endpoint {Path}.",
                     ApiKeyHeaderName, context.HttpContext.Request.Path);
 
                 context.Result = new UnauthorizedObjectResult(new
                 {
-                    error = $"Unauthorized access. A valid {ApiKeyHeaderName} header is required."
+                    error = $"Unauthorized access. A valid {ApiKeyHeaderName} header or Admin authorization is required."
                 });
                 return;
             }

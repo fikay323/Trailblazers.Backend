@@ -14,13 +14,21 @@ namespace Trailblazers.Backend.Core.Application.Features.Exams.StartExam
 
     public class StartExamCommandHandler(
         IExamQuestionRepository questionRepository,
-        IExamSessionRepository sessionRepository)
+        IExamSessionRepository sessionRepository,
+        IStudentStatusService studentStatusService)
         : IRequestHandler<StartExamCommand, ExamStartResponseDto>
     {
         public async Task<ExamStartResponseDto> Handle(StartExamCommand request, CancellationToken cancellationToken)
         {
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
+
+            // Verify student account status (block deactivated/suspended accounts)
+            var (isAllowed, reason) = await studentStatusService.ValidateStudentAccessAsync(request.StudentEmail, cancellationToken);
+            if (!isAllowed)
+            {
+                throw new ValidationException($"Exam access restricted. {reason}");
+            }
 
             // 1. Fetch questions for the specified year and subjects
             var questionsList =

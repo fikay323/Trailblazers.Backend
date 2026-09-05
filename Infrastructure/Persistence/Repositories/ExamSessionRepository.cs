@@ -82,5 +82,24 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
                 throw;
             }
         }
+
+        public async Task<IEnumerable<ExamResult>> GetResultsByStudentEmailAsync(string studentEmail, CancellationToken cancellationToken = default)
+        {
+            var normalizedEmail = studentEmail.Trim().ToLowerInvariant();
+            return await context.ExamResults
+                .Include(r => r.Session)
+                .ThenInclude(s => s!.Answers)
+                .Where(r => r.CandidateId == normalizedEmail)
+                .OrderByDescending(r => r.CompletedAt)
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task<IEnumerable<ExamResult>> GetAllResultsAsync(CancellationToken cancellationToken = default)
+        {
+            return await context.ExamResults
+                .Include(r => r.Session)
+                .OrderByDescending(r => r.CompletedAt)
+                .ToListAsync(cancellationToken);
+        }
     }
 }
