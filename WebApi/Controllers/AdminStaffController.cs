@@ -294,34 +294,46 @@ namespace Trailblazers.Backend.WebApi.Controllers
 
                 var adminIdsList = adminUserIds.ToList();
 
-                await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+                int deletedResults = 0;
+                int deletedSessions = 0;
+                int deletedAttendance = 0;
+                int deletedTokens = 0;
+                int deletedInvitations = 0;
+                int deletedSubmissions = 0;
+                int deletedUsers = 0;
 
-                // 1. Delete all exam results and sessions
-                var deletedResults = await dbContext.ExamResults.ExecuteDeleteAsync(cancellationToken);
-                var deletedSessions = await dbContext.ExamSessions.ExecuteDeleteAsync(cancellationToken);
+                var strategy = dbContext.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-                // 2. Delete all attendance clock-in records
-                var deletedAttendance = await dbContext.AttendanceRecords.ExecuteDeleteAsync(cancellationToken);
+                    // 1. Delete all exam results and sessions
+                    deletedResults = await dbContext.ExamResults.ExecuteDeleteAsync(cancellationToken);
+                    deletedSessions = await dbContext.ExamSessions.ExecuteDeleteAsync(cancellationToken);
 
-                // 3. Delete all active refresh tokens
-                var deletedTokens = await dbContext.RefreshTokens.ExecuteDeleteAsync(cancellationToken);
+                    // 2. Delete all attendance clock-in records
+                    deletedAttendance = await dbContext.AttendanceRecords.ExecuteDeleteAsync(cancellationToken);
 
-                // 4. Delete all staff invitations
-                var deletedInvitations = await dbContext.StaffInvitations.ExecuteDeleteAsync(cancellationToken);
+                    // 3. Delete all active refresh tokens
+                    deletedTokens = await dbContext.RefreshTokens.ExecuteDeleteAsync(cancellationToken);
 
-                // 5. Delete all student registrations and contact inquiries
-                var deletedSubmissions = await dbContext.Submissions.ExecuteDeleteAsync(cancellationToken);
+                    // 4. Delete all staff invitations
+                    deletedInvitations = await dbContext.StaffInvitations.ExecuteDeleteAsync(cancellationToken);
 
-                // 6. Delete Identity Child Tables for Non-Admin Users
-                await dbContext.UserRoles.Where(ur => !adminUserIds.Contains(ur.UserId)).ExecuteDeleteAsync(cancellationToken);
-                await dbContext.UserClaims.Where(uc => !adminUserIds.Contains(uc.UserId)).ExecuteDeleteAsync(cancellationToken);
-                await dbContext.UserLogins.Where(ul => !adminUserIds.Contains(ul.UserId)).ExecuteDeleteAsync(cancellationToken);
-                await dbContext.UserTokens.Where(ut => !adminUserIds.Contains(ut.UserId)).ExecuteDeleteAsync(cancellationToken);
+                    // 5. Delete all student registrations and contact inquiries
+                    deletedSubmissions = await dbContext.Submissions.ExecuteDeleteAsync(cancellationToken);
 
-                // 7. Delete non-admin users from Users
-                var deletedUsers = await dbContext.Users.Where(u => !adminUserIds.Contains(u.Id)).ExecuteDeleteAsync(cancellationToken);
+                    // 6. Delete Identity Child Tables for Non-Admin Users
+                    await dbContext.UserRoles.Where(ur => !adminUserIds.Contains(ur.UserId)).ExecuteDeleteAsync(cancellationToken);
+                    await dbContext.UserClaims.Where(uc => !adminUserIds.Contains(uc.UserId)).ExecuteDeleteAsync(cancellationToken);
+                    await dbContext.UserLogins.Where(ul => !adminUserIds.Contains(ul.UserId)).ExecuteDeleteAsync(cancellationToken);
+                    await dbContext.UserTokens.Where(ut => !adminUserIds.Contains(ut.UserId)).ExecuteDeleteAsync(cancellationToken);
 
-                await transaction.CommitAsync(cancellationToken);
+                    // 7. Delete non-admin users from Users
+                    deletedUsers = await dbContext.Users.Where(u => !adminUserIds.Contains(u.Id)).ExecuteDeleteAsync(cancellationToken);
+
+                    await transaction.CommitAsync(cancellationToken);
+                });
 
                 var preservedQuestionsCount = await dbContext.ExamQuestions.CountAsync(cancellationToken);
                 var remainingUsersCount = await dbContext.Users.CountAsync(cancellationToken);
