@@ -181,10 +181,9 @@ namespace Trailblazers.Backend.Infrastructure.Services
 
         public async Task<DailyRosterResponseDto> GetDailyRosterAsync(DateOnly date)
         {
-            // 1. Get all students registered in the system
-            var students = await userManager.Users
-                .OrderBy(u => u.FullName)
-                .ToListAsync();
+            // 1. Get only users enrolled in the Student role (exclude instructors and admins)
+            var studentUsers = await userManager.GetUsersInRoleAsync("Student");
+            var students = studentUsers.OrderBy(u => u.FullName).ToList();
 
             // 2. Get attendance records for this date
             var records = await dbContext.AttendanceRecords

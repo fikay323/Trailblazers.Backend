@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Trailblazers.Backend.Core.Domain.Entities;
+using Trailblazers.Backend.Core.Domain.Repositories;
 using Trailblazers.Backend.Core.Application.Submissions.Commands;
 using Trailblazers.Backend.Core.Application.Submissions.Queries;
 using Trailblazers.Backend.WebApi.Authentication;
@@ -11,7 +12,8 @@ namespace Trailblazers.Backend.WebApi.Controllers
     public class SubmissionsController(
         SubmitContactCommandHandler contactHandler,
         SubmitRegistrationCommandHandler registrationHandler,
-        GetSubmissionsQueryHandler queryHandler)
+        GetSubmissionsQueryHandler queryHandler,
+        ISubmissionRepository repository)
         : ControllerBase
     {
         [HttpPost("contact")]
@@ -82,6 +84,26 @@ namespace Trailblazers.Backend.WebApi.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { error = "An internal error occurred.", details = ex.Message });
+            }
+        }
+
+        [HttpDelete("{id:guid}")]
+        [ServiceFilter(typeof(ApiKeyAuthFilter))]
+        public async Task<IActionResult> DeleteSubmission(Guid id, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var deleted = await repository.DeleteAsync(id, cancellationToken);
+                if (!deleted)
+                {
+                    return NotFound(new { error = "Submission not found." });
+                }
+
+                return Ok(new { message = "Submission deleted successfully." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = "An internal error occurred while deleting submission.", details = ex.Message });
             }
         }
     }

@@ -58,5 +58,15 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
 
             return (items, totalCount);
         }
+
+        public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            var submission = await context.Submissions.FindAsync([id], cancellationToken);
+            if (submission == null) return false;
+
+            context.Submissions.Remove(submission);
+            await context.SaveChangesAsync(cancellationToken);
+            return true;
+        }
     }
 }

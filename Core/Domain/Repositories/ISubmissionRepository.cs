@@ -15,5 +15,7 @@ namespace Trailblazers.Backend.Core.Domain.Repositories
             int skip,
             int take,
             CancellationToken cancellationToken = default);
+
+        Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
     }
 }
