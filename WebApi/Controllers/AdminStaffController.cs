@@ -1,9 +1,11 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Trailblazers.Backend.Core.Application.Features.Staff.Dtos;
 using Trailblazers.Backend.Core.Application.Interfaces;
 using Trailblazers.Backend.Core.Domain.Entities;
+using Trailblazers.Backend.Infrastructure.Persistence;
 using Trailblazers.Backend.WebApi.Authentication;
 
 namespace Trailblazers.Backend.WebApi.Controllers
@@ -14,6 +16,7 @@ namespace Trailblazers.Backend.WebApi.Controllers
         IStaffInvitationService invitationService,
         IStaffManagementService staffManagementService,
         UserManager<ApplicationUser> userManager,
+        ApplicationDbContext dbContext,
         ILogger<AdminStaffController> logger) : ControllerBase
     {
         [HttpGet]
@@ -264,6 +267,90 @@ namespace Trailblazers.Backend.WebApi.Controllers
 
             Response.Cookies.Append("auth_token", token, authCookieOptions);
             Response.Cookies.Append("refresh_token", refreshToken, refreshCookieOptions);
+        }
+
+        [HttpPost("maintenance/purge-dev-database")]
+        [ServiceFilter(typeof(ApiKeyAuthFilter))]
+        public async Task<IActionResult> PurgeDevDatabase(CancellationToken cancellationToken)
+        {
+            try
+            {
+                logger.LogWarning("Dev database purge initiated by authorized administrator or API key.");
+
+                // Identify Admin user(s) to preserve
+                var adminUsers = await userManager.GetUsersInRoleAsync("Admin");
+                var adminUserIds = adminUsers.Select(u => u.Id).ToHashSet();
+
+                var defaultAdmin = await userManager.FindByEmailAsync("admin@trailblazer.edu");
+                if (defaultAdmin != null)
+                {
+                    adminUserIds.Add(defaultAdmin.Id);
+                }
+
+                if (adminUserIds.Count == 0)
+                {
+                    return BadRequest(new { error = "Cannot purge database: No admin account was found to preserve. Please ensure at least one Admin user exists." });
+                }
+
+                var adminIdsList = adminUserIds.ToList();
+
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+                // 1. Delete all exam results and sessions
+                var deletedResults = await dbContext.ExamResults.ExecuteDeleteAsync(cancellationToken);
+                var deletedSessions = await dbContext.ExamSessions.ExecuteDeleteAsync(cancellationToken);
+
+                // 2. Delete all attendance clock-in records
+                var deletedAttendance = await dbContext.AttendanceRecords.ExecuteDeleteAsync(cancellationToken);
+
+                // 3. Delete all active refresh tokens
+                var deletedTokens = await dbContext.RefreshTokens.ExecuteDeleteAsync(cancellationToken);
+
+                // 4. Delete all staff invitations
+                var deletedInvitations = await dbContext.StaffInvitations.ExecuteDeleteAsync(cancellationToken);
+
+                // 5. Delete all student registrations and contact inquiries
+                var deletedSubmissions = await dbContext.Submissions.ExecuteDeleteAsync(cancellationToken);
+
+                // 6. Delete Identity Child Tables for Non-Admin Users
+                await dbContext.UserRoles.Where(ur => !adminUserIds.Contains(ur.UserId)).ExecuteDeleteAsync(cancellationToken);
+                await dbContext.UserClaims.Where(uc => !adminUserIds.Contains(uc.UserId)).ExecuteDeleteAsync(cancellationToken);
+                await dbContext.UserLogins.Where(ul => !adminUserIds.Contains(ul.UserId)).ExecuteDeleteAsync(cancellationToken);
+                await dbContext.UserTokens.Where(ut => !adminUserIds.Contains(ut.UserId)).ExecuteDeleteAsync(cancellationToken);
+
+                // 7. Delete non-admin users from Users
+                var deletedUsers = await dbContext.Users.Where(u => !adminUserIds.Contains(u.Id)).ExecuteDeleteAsync(cancellationToken);
+
+                await transaction.CommitAsync(cancellationToken);
+
+                var preservedQuestionsCount = await dbContext.ExamQuestions.CountAsync(cancellationToken);
+                var remainingUsersCount = await dbContext.Users.CountAsync(cancellationToken);
+
+                logger.LogInformation("Dev database purge complete. Preserved {Questions} questions and {Users} admin user(s).",
+                    preservedQuestionsCount, remainingUsersCount);
+
+                return Ok(new
+                {
+                    message = "Dev stage database successfully purged. All test records cleared while preserving exam questions and the admin account.",
+                    preservedExamQuestions = preservedQuestionsCount,
+                    preservedAdminUsers = remainingUsersCount,
+                    deletedRecords = new
+                    {
+                        examResults = deletedResults,
+                        examSessions = deletedSessions,
+                        attendanceRecords = deletedAttendance,
+                        refreshTokens = deletedTokens,
+                        staffInvitations = deletedInvitations,
+                        submissions = deletedSubmissions,
+                        users = deletedUsers
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to execute database purge");
+                return StatusCode(500, new { error = $"Database purge failed: {ex.Message}" });
+            }
         }
     }
 }

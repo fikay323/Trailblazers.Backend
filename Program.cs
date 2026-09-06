@@ -206,12 +206,10 @@ using (var scope = app.Services.CreateScope())
             }
         }
 
-        // Seed demo accounts if missing
+        // Seed initial admin account if missing
         var seedUsers = new[]
         {
-            new { Email = "admin@trailblazer.edu", Name = "System Administrator", Role = "Admin", Password = "AdminPassword123!" },
-            new { Email = "instructor@trailblazer.edu", Name = "Lead Instructor", Role = "Instructor", Password = "Instructor123!" },
-            new { Email = "student@trailblazer.edu", Name = "Demo Student", Role = "Student", Password = "Student123!" }
+            new { Email = "admin@trailblazer.edu", Name = "System Administrator", Role = "Admin", Password = "AdminPassword123!" }
         };
 
         foreach (var su in seedUsers)

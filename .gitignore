@@ -4,3 +4,4 @@ obj/
 **/.env
 **/.env.local
 **.sql
+!scripts/purge_dev_database.sql
