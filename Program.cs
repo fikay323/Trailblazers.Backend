@@ -146,6 +146,7 @@ builder.Services.AddScoped<GetSubmissionsQueryHandler>();
 builder.Services.AddScoped<ApiKeyAuthFilter>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IStudentStatusService, StudentStatusService>();
+builder.Services.AddScoped<IAttendanceService, AttendanceService>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>(

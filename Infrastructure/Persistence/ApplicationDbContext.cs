@@ -13,6 +13,8 @@ namespace Trailblazers.Backend.Infrastructure.Persistence
         public DbSet<ExamSession> ExamSessions => Set<ExamSession>();
         public DbSet<ExamResult> ExamResults => Set<ExamResult>();
         public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+        public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
+        public DbSet<AttendanceSetting> AttendanceSettings => Set<AttendanceSetting>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
