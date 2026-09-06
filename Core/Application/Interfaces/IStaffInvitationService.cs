@@ -19,7 +19,12 @@ namespace Trailblazers.Backend.Core.Application.Interfaces
             AcceptInvitationRequestDto request,
             CancellationToken cancellationToken = default);
 
-        Task<bool> ResendInvitationAsync(
+        Task<ResendInvitationResponseDto> ResendInvitationAsync(
+            Guid invitationId,
+            Guid requestedByUserId,
+            CancellationToken cancellationToken = default);
+
+        Task<bool> DeleteInvitationAsync(
             Guid invitationId,
             Guid requestedByUserId,
             CancellationToken cancellationToken = default);

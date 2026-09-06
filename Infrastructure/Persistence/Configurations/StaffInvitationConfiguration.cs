@@ -31,6 +31,13 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Configurations
             builder.Property(x => x.InvitedByUserName)
                 .HasMaxLength(200);
 
+            builder.Property(x => x.EmailDeliveryStatus)
+                .HasMaxLength(50)
+                .HasDefaultValue("Pending");
+
+            builder.Property(x => x.EmailDeliveryError)
+                .HasMaxLength(1000);
+
             builder.HasIndex(x => x.Email);
             builder.HasIndex(x => x.TokenHash);
             builder.HasIndex(x => x.IsAccepted);

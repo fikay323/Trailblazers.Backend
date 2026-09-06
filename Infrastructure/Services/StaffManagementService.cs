@@ -78,7 +78,9 @@ namespace Trailblazers.Backend.Infrastructure.Services
                     Status = isExpired ? "ExpiredInvite" : "PendingInvite",
                     CreatedAt = inv.CreatedAt,
                     InvitationId = inv.Id,
-                    InvitationExpiresAt = inv.ExpiresAt
+                    InvitationExpiresAt = inv.ExpiresAt,
+                    EmailDeliveryStatus = inv.EmailDeliveryStatus,
+                    EmailDeliveryError = inv.EmailDeliveryError
                 });
             }
 

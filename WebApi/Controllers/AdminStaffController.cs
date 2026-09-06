@@ -74,18 +74,47 @@ namespace Trailblazers.Backend.WebApi.Controllers
 
             try
             {
-                var success = await invitationService.ResendInvitationAsync(id, callerId, cancellationToken);
-                if (!success)
+                var result = await invitationService.ResendInvitationAsync(id, callerId, cancellationToken);
+                if (!result.Succeeded)
                 {
-                    return NotFound(new { error = "Invitation not found or has already been accepted." });
+                    return NotFound(new { error = result.Error ?? "Invitation not found or has already been accepted." });
                 }
 
-                return Ok(new { message = "Invitation email resent successfully." });
+                return Ok(new
+                {
+                    message = result.EmailStatusMessage ?? "Invitation refreshed successfully.",
+                    inviteUrl = result.InviteUrl,
+                    emailSent = result.EmailSent,
+                    emailStatusMessage = result.EmailStatusMessage
+                });
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to resend staff invitation {Id}", id);
                 return StatusCode(500, new { error = "Failed to resend invitation email." });
+            }
+        }
+
+        [HttpDelete("invitations/{id:guid}")]
+        [ServiceFilter(typeof(ApiKeyAuthFilter))]
+        public async Task<IActionResult> DeleteInvitation(Guid id, CancellationToken cancellationToken)
+        {
+            var (callerId, _) = await ResolveCurrentStaffUserAsync();
+
+            try
+            {
+                var success = await invitationService.DeleteInvitationAsync(id, callerId, cancellationToken);
+                if (!success)
+                {
+                    return NotFound(new { error = "Invitation not found or has already been accepted." });
+                }
+
+                return Ok(new { message = "Staff invitation deleted successfully." });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to delete staff invitation {Id}", id);
+                return StatusCode(500, new { error = "Failed to delete staff invitation." });
             }
         }
 

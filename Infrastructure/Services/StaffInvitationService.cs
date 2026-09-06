@@ -77,6 +77,9 @@ namespace Trailblazers.Backend.Infrastructure.Services
 
             var inviteUrl = $"{frontendUrl.TrimEnd('/')}/auth/accept-invite?token={rawToken}&email={Uri.EscapeDataString(cleanEmail)}";
 
+            bool emailSent = false;
+            string? emailStatusMessage = null;
+
             try
             {
                 var emailHtml = templateService.RenderStaffInvitationEmail(
@@ -91,13 +94,24 @@ namespace Trailblazers.Backend.Infrastructure.Services
                     body: emailHtml,
                     isHtml: true);
 
+                emailSent = true;
+                emailStatusMessage = $"Invitation email successfully sent to {cleanEmail}.";
+                invitation.EmailDeliveryStatus = "Sent";
+                invitation.EmailDeliveryError = null;
                 logger.LogInformation("Staff invitation email successfully dispatched to {Email} ({Role})", cleanEmail, cleanRole);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to send staff invitation email to {Email}", cleanEmail);
-                // Note: We don't fail the transaction, so the admin can resend or retrieve link
+                emailSent = false;
+                var reason = ex is TimeoutException ? "Connection timed out (outbound SMTP ports may be blocked on Render)" : ex.Message;
+                emailStatusMessage = $"Email delivery failed: {reason}. You can copy and share the invitation link directly.";
+                invitation.EmailDeliveryStatus = "Failed";
+                invitation.EmailDeliveryError = reason;
+                logger.LogWarning(ex, "Could not send staff invitation email to {Email}: {Reason}", cleanEmail, reason);
             }
+
+            // Save status update
+            await dbContext.SaveChangesAsync(cancellationToken);
 
             return new StaffInvitationDto
             {
@@ -108,7 +122,10 @@ namespace Trailblazers.Backend.Infrastructure.Services
                 ExpiresAt = invitation.ExpiresAt,
                 InvitedByUserName = invitation.InvitedByUserName,
                 IsAccepted = invitation.IsAccepted,
-                CreatedAt = invitation.CreatedAt
+                CreatedAt = invitation.CreatedAt,
+                InviteUrl = inviteUrl,
+                EmailSent = emailSent,
+                EmailStatusMessage = emailStatusMessage
             };
         }
 
@@ -246,7 +263,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
             });
         }
 
-        public async Task<bool> ResendInvitationAsync(
+        public async Task<ResendInvitationResponseDto> ResendInvitationAsync(
             Guid invitationId,
             Guid requestedByUserId,
             CancellationToken cancellationToken = default)
@@ -254,7 +271,14 @@ namespace Trailblazers.Backend.Infrastructure.Services
             var invitation = await dbContext.StaffInvitations
                 .FirstOrDefaultAsync(x => x.Id == invitationId, cancellationToken);
 
-            if (invitation == null || invitation.IsAccepted) return false;
+            if (invitation == null || invitation.IsAccepted)
+            {
+                return new ResendInvitationResponseDto
+                {
+                    Succeeded = false,
+                    Error = "Invitation not found or has already been accepted."
+                };
+            }
 
             // Generate fresh token and extend validity by 48 hours
             var rawToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
@@ -262,13 +286,14 @@ namespace Trailblazers.Backend.Infrastructure.Services
             invitation.ExpiresAt = DateTimeOffset.UtcNow.AddHours(48);
             invitation.UpdatedAt = DateTimeOffset.UtcNow;
 
-            await dbContext.SaveChangesAsync(cancellationToken);
-
             var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
                            ?? Environment.GetEnvironmentVariable("APP_URL")
                            ?? "http://localhost:3000";
 
             var inviteUrl = $"{frontendUrl.TrimEnd('/')}/auth/accept-invite?token={rawToken}&email={Uri.EscapeDataString(invitation.Email)}";
+
+            bool emailSent = false;
+            string? emailStatusMessage = null;
 
             try
             {
@@ -284,14 +309,53 @@ namespace Trailblazers.Backend.Infrastructure.Services
                     body: emailHtml,
                     isHtml: true);
 
+                emailSent = true;
+                emailStatusMessage = $"Invitation email successfully resent to {invitation.Email}.";
+                invitation.EmailDeliveryStatus = "Sent";
+                invitation.EmailDeliveryError = null;
                 logger.LogInformation("Staff invitation resent to {Email}", invitation.Email);
-                return true;
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to resend staff invitation email to {Email}", invitation.Email);
-                return true; // Token was refreshed even if SMTP had an issue
+                emailSent = false;
+                var reason = ex is TimeoutException ? "Connection timed out (outbound SMTP ports may be blocked on Render)" : ex.Message;
+                emailStatusMessage = $"Email delivery failed: {reason}. You can copy and share the invitation link directly.";
+                invitation.EmailDeliveryStatus = "Failed";
+                invitation.EmailDeliveryError = reason;
+                logger.LogWarning(ex, "Failed to resend staff invitation email to {Email}: {Reason}", invitation.Email, reason);
             }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            return new ResendInvitationResponseDto
+            {
+                Succeeded = true,
+                InviteUrl = inviteUrl,
+                EmailSent = emailSent,
+                EmailStatusMessage = emailStatusMessage
+            };
+        }
+
+        public async Task<bool> DeleteInvitationAsync(
+            Guid invitationId,
+            Guid requestedByUserId,
+            CancellationToken cancellationToken = default)
+        {
+            var invitation = await dbContext.StaffInvitations
+                .FirstOrDefaultAsync(x => x.Id == invitationId && !x.IsAccepted, cancellationToken);
+
+            if (invitation == null)
+            {
+                return false;
+            }
+
+            dbContext.StaffInvitations.Remove(invitation);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation("Staff invitation {Id} for {Email} deleted by User {UserId}",
+                invitationId, invitation.Email, requestedByUserId);
+
+            return true;
         }
 
         private static string HashToken(string token)

@@ -19,6 +19,8 @@ namespace Trailblazers.Backend.Core.Application.Features.Staff.Dtos
         public DateTimeOffset CreatedAt { get; set; }
         public Guid? InvitationId { get; set; }
         public DateTimeOffset? InvitationExpiresAt { get; set; }
+        public string EmailDeliveryStatus { get; set; } = "Sent"; // "Sent", "Failed", "Pending"
+        public string? EmailDeliveryError { get; set; }
     }
 
     public class UpdateStaffRoleRequestDto
@@ -58,5 +60,17 @@ namespace Trailblazers.Backend.Core.Application.Features.Staff.Dtos
         public string InvitedByUserName { get; set; } = string.Empty;
         public bool IsAccepted { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
+        public string? InviteUrl { get; set; }
+        public bool EmailSent { get; set; } = true;
+        public string? EmailStatusMessage { get; set; }
+    }
+
+    public class ResendInvitationResponseDto
+    {
+        public bool Succeeded { get; set; }
+        public string? InviteUrl { get; set; }
+        public bool EmailSent { get; set; } = true;
+        public string? EmailStatusMessage { get; set; }
+        public string? Error { get; set; }
     }
 }

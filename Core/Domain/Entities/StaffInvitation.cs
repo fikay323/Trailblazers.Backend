@@ -12,6 +12,8 @@ namespace Trailblazers.Backend.Core.Domain.Entities
         public string InvitedByUserName { get; set; } = string.Empty;
         public bool IsAccepted { get; set; } = false;
         public DateTimeOffset? AcceptedAt { get; set; }
+        public string EmailDeliveryStatus { get; set; } = "Pending"; // "Sent", "Failed", "Pending"
+        public string? EmailDeliveryError { get; set; }
         public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
         public DateTimeOffset? UpdatedAt { get; set; }
     }
