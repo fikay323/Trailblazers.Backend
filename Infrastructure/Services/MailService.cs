@@ -8,7 +8,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
 {
     public class MailService(ILogger<MailService> logger) : IMailService
     {
-        public async Task SendEmailAsync(string to, string subject, string body)
+        public async Task SendEmailAsync(string to, string subject, string body, bool isHtml = false)
         {
             var host = Environment.GetEnvironmentVariable("SMTP_HOST") ?? "localhost";
             var portStr = Environment.GetEnvironmentVariable("SMTP_PORT");
@@ -27,7 +27,15 @@ namespace Trailblazers.Backend.Infrastructure.Services
             message.To.Add(new MailboxAddress("Recipient", to));
             message.Subject = subject;
 
-            var bodyBuilder = new BodyBuilder { TextBody = body };
+            var bodyBuilder = new BodyBuilder();
+            if (isHtml)
+            {
+                bodyBuilder.HtmlBody = body;
+            }
+            else
+            {
+                bodyBuilder.TextBody = body;
+            }
             message.Body = bodyBuilder.ToMessageBody();
 
             using var client = new SmtpClient();

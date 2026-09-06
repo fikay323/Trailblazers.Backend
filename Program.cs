@@ -151,6 +151,9 @@ builder.Services.AddScoped<ApiKeyAuthFilter>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IStudentStatusService, StudentStatusService>();
 builder.Services.AddScoped<IAttendanceService, AttendanceService>();
+builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
+builder.Services.AddScoped<IStaffInvitationService, StaffInvitationService>();
+builder.Services.AddScoped<IStaffManagementService, StaffManagementService>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>(

@@ -15,6 +15,7 @@ namespace Trailblazers.Backend.Infrastructure.Persistence
         public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
         public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
         public DbSet<AttendanceSetting> AttendanceSettings => Set<AttendanceSetting>();
+        public DbSet<StaffInvitation> StaffInvitations => Set<StaffInvitation>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
