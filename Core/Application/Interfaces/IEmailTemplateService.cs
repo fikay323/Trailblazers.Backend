@@ -31,5 +31,19 @@ namespace Trailblazers.Backend.Core.Application.Interfaces
             string recipientName,
             string resetUrl,
             string? logoUrl = null);
+
+        string RenderGuardianProgressReportEmail(
+            string studentName,
+            string guardianName,
+            DateTimeOffset startDate,
+            DateTimeOffset endDate,
+            int totalTests,
+            double averagePercentage,
+            double highestPercentage,
+            double passRate,
+            int attendancePresent,
+            int attendanceLate,
+            string? customRemarks,
+            string? logoUrl = null);
     }
 }

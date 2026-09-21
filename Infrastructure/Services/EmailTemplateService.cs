@@ -442,5 +442,145 @@ namespace Trailblazers.Backend.Infrastructure.Services
 </body>
 </html>";
         }
+
+        public string RenderGuardianProgressReportEmail(
+            string studentName,
+            string guardianName,
+            DateTimeOffset startDate,
+            DateTimeOffset endDate,
+            int totalTests,
+            double averagePercentage,
+            double highestPercentage,
+            double passRate,
+            int attendancePresent,
+            int attendanceLate,
+            string? customRemarks,
+            string? logoUrl = null)
+        {
+            var cleanStudentName = WebUtility.HtmlEncode(studentName);
+            var cleanGuardianName = string.IsNullOrWhiteSpace(guardianName) ? "Parent / Guardian" : WebUtility.HtmlEncode(guardianName);
+            var cleanRemarks = !string.IsNullOrWhiteSpace(customRemarks) ? WebUtility.HtmlEncode(customRemarks) : null;
+            var formattedStartDate = startDate.ToString("MMM d, yyyy");
+            var formattedEndDate = endDate.ToString("MMM d, yyyy");
+            var resolvedLogoUrl = !string.IsNullOrWhiteSpace(logoUrl)
+                ? WebUtility.HtmlEncode(logoUrl)
+                : "https://trailblazer-academy.com/trailblazer.jpeg";
+
+            var remarksSection = cleanRemarks != null ? $@"
+                            <!-- Instructor Remarks -->
+                            <div style=""background-color: #020617; border-left: 4px solid #f97316; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px;"">
+                                <h4 style=""margin: 0 0 6px; font-size: 13px; font-weight: 700; color: #f97316; text-transform: uppercase; letter-spacing: 0.5px;"">
+                                    Instructor / Academic Advisor Remarks:
+                                </h4>
+                                <p style=""margin: 0; font-size: 13px; line-height: 20px; color: #e2e8f0; font-style: italic;"">
+                                    &ldquo;{cleanRemarks}&rdquo;
+                                </p>
+                            </div>" : "";
+
+            return $@"
+<!DOCTYPE html>
+<html lang=""en"">
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>Academic Progress Report Card - {cleanStudentName}</title>
+</head>
+<body style=""margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #090d16; color: #f1f5f9;"">
+    <table width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""background-color: #090d16; padding: 40px 16px;"">
+        <tr>
+            <td align=""center"">
+                <table width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""max-width: 600px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);"">
+                    <!-- Header with Logo -->
+                    <tr>
+                        <td align=""center"" style=""padding: 36px 32px 24px; border-bottom: 1px solid #1e293b; background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);"">
+                            <img src=""{resolvedLogoUrl}"" alt=""Trailblazers Academy"" width=""64"" height=""64"" style=""border-radius: 50%; display: block; border: 2px solid #f97316; margin-bottom: 14px; object-fit: cover;"">
+                            <h1 style=""margin: 0; font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;"">Trailblazers Academy & Edukonsult</h1>
+                            <p style=""margin: 4px 0 0; font-size: 13px; color: #f97316; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;"">Student Academic Progress Report Card</p>
+                        </td>
+                    </tr>
+
+                    <!-- Body Content -->
+                    <tr>
+                        <td style=""padding: 36px 32px;"">
+                            <h2 style=""margin: 0 0 8px; font-size: 18px; font-weight: 700; color: #ffffff;"">
+                                Dear {cleanGuardianName},
+                            </h2>
+                            <p style=""margin: 0 0 20px; font-size: 14px; line-height: 22px; color: #cbd5e1;"">
+                                Below is the official academic and CBT mock examination progress summary for your ward, <strong style=""color: #ffffff;"">{cleanStudentName}</strong>, covering the period from <strong style=""color: #f97316;"">{formattedStartDate}</strong> to <strong style=""color: #f97316;"">{formattedEndDate}</strong>.
+                            </p>
+
+                            <!-- Performance KPI Metrics Grid -->
+                            <table width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""margin-bottom: 24px;"">
+                                <tr>
+                                    <td width=""48%"" style=""background-color: #020617; border: 1px solid #1e293b; border-radius: 10px; padding: 16px; text-align: center;"">
+                                        <span style=""font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;"">Average Mock Score</span>
+                                        <span style=""font-size: 26px; font-weight: 800; color: #38bdf8;"">{averagePercentage:F1}%</span>
+                                    </td>
+                                    <td width=""4%""></td>
+                                    <td width=""48%"" style=""background-color: #020617; border: 1px solid #1e293b; border-radius: 10px; padding: 16px; text-align: center;"">
+                                        <span style=""font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;"">Highest Score Achieved</span>
+                                        <span style=""font-size: 26px; font-weight: 800; color: #34d399;"">{highestPercentage:F1}%</span>
+                                    </td>
+                                </tr>
+                                <tr><td height=""12"" colspan=""3""></td></tr>
+                                <tr>
+                                    <td width=""48%"" style=""background-color: #020617; border: 1px solid #1e293b; border-radius: 10px; padding: 16px; text-align: center;"">
+                                        <span style=""font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;"">Tests Completed</span>
+                                        <span style=""font-size: 26px; font-weight: 800; color: #ffffff;"">{totalTests}</span>
+                                    </td>
+                                    <td width=""4%""></td>
+                                    <td width=""48%"" style=""background-color: #020617; border: 1px solid #1e293b; border-radius: 10px; padding: 16px; text-align: center;"">
+                                        <span style=""font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;"">Pass Rate (&ge;50%)</span>
+                                        <span style=""font-size: 26px; font-weight: 800; color: #f59e0b;"">{passRate:F0}%</span>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Physical Attendance Record -->
+                            <div style=""background-color: #020617; border: 1px solid #1e293b; border-radius: 10px; padding: 16px 20px; margin-bottom: 24px;"">
+                                <h4 style=""margin: 0 0 8px; font-size: 13px; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.5px;"">
+                                    Tutorial Center Attendance Record:
+                                </h4>
+                                <table width=""100%"" cellpadding=""0"" cellspacing=""0"">
+                                    <tr>
+                                        <td style=""font-size: 13px; color: #94a3b8;"">
+                                            Present on Campus: <strong style=""color: #34d399;"">{attendancePresent} Days</strong>
+                                        </td>
+                                        <td align=""right"" style=""font-size: 13px; color: #94a3b8;"">
+                                            Late Arrivals: <strong style=""color: #f59e0b;"">{attendanceLate} Days</strong>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            {remarksSection}
+
+                            <p style=""margin: 0 0 20px; font-size: 13px; line-height: 20px; color: #94a3b8;"">
+                                We encourage parents and guardians to review these results with their ward to foster consistent preparation and punctuality. For any inquiries regarding performance or tutoring assistance, please reach out to our academic team.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td align=""center"" style=""padding: 24px 32px; background-color: #020617; border-top: 1px solid #1e293b;"">
+                            <p style=""margin: 0 0 4px; font-size: 12px; color: #94a3b8; font-weight: 600;"">
+                                Trailblazers Academy & Edukonsult
+                            </p>
+                            <p style=""margin: 0 0 4px; font-size: 11px; color: #475569;"">
+                                Opp. Ajorosun Garden City, Ijaye-Iseyin Road, Odo Oba Moniya, Ibadan
+                            </p>
+                            <p style=""margin: 0; font-size: 11px; color: #f97316;"">
+                                Phone: +234 816 599 9425 &bull; info@trailblazer-academy.com
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>";
+        }
     }
 }
