@@ -1,7 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Trailblazers.Backend.Core.Application.Features.Staff.Dtos;
 using Trailblazers.Backend.Core.Application.Interfaces;
@@ -16,6 +18,8 @@ namespace Trailblazers.Backend.Infrastructure.Services
         IEmailTemplateService templateService,
         IMailService mailService,
         IJwtTokenService jwtTokenService,
+        IHttpContextAccessor httpContextAccessor,
+        IConfiguration configuration,
         ILogger<StaffInvitationService> logger) : IStaffInvitationService
     {
         public async Task<StaffInvitationDto> InviteStaffAsync(
@@ -71,11 +75,8 @@ namespace Trailblazers.Backend.Infrastructure.Services
             await dbContext.SaveChangesAsync(cancellationToken);
 
             // Construct invitation link
-            var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
-                           ?? Environment.GetEnvironmentVariable("APP_URL")
-                           ?? "http://localhost:3000";
-
-            var inviteUrl = $"{frontendUrl.TrimEnd('/')}/auth/accept-invite?token={rawToken}&email={Uri.EscapeDataString(cleanEmail)}";
+            var frontendUrl = ResolveFrontendUrl();
+            var inviteUrl = $"{frontendUrl}/auth/accept-invite?token={rawToken}&email={Uri.EscapeDataString(cleanEmail)}";
 
             bool emailSent = false;
             string? emailStatusMessage = null;
@@ -286,11 +287,8 @@ namespace Trailblazers.Backend.Infrastructure.Services
             invitation.ExpiresAt = DateTimeOffset.UtcNow.AddHours(48);
             invitation.UpdatedAt = DateTimeOffset.UtcNow;
 
-            var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
-                           ?? Environment.GetEnvironmentVariable("APP_URL")
-                           ?? "http://localhost:3000";
-
-            var inviteUrl = $"{frontendUrl.TrimEnd('/')}/auth/accept-invite?token={rawToken}&email={Uri.EscapeDataString(invitation.Email)}";
+            var frontendUrl = ResolveFrontendUrl();
+            var inviteUrl = $"{frontendUrl}/auth/accept-invite?token={rawToken}&email={Uri.EscapeDataString(invitation.Email)}";
 
             bool emailSent = false;
             string? emailStatusMessage = null;
@@ -356,6 +354,57 @@ namespace Trailblazers.Backend.Infrastructure.Services
                 invitationId, invitation.Email, requestedByUserId);
 
             return true;
+        }
+
+        private string ResolveFrontendUrl()
+        {
+            // 1. Check explicit environment variables or configuration
+            var envUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
+                      ?? Environment.GetEnvironmentVariable("APP_URL")
+                      ?? configuration["FrontendUrl"];
+
+            if (!string.IsNullOrWhiteSpace(envUrl))
+            {
+                return envUrl.TrimEnd('/');
+            }
+
+            // 2. Inspect incoming request if available (Origin / Referer sent by frontend)
+            var httpContext = httpContextAccessor.HttpContext;
+            if (httpContext != null)
+            {
+                if (httpContext.Request.Headers.TryGetValue("Origin", out var origin) && !string.IsNullOrWhiteSpace(origin))
+                {
+                    return origin.ToString().TrimEnd('/');
+                }
+
+                if (httpContext.Request.Headers.TryGetValue("Referer", out var referer) && !string.IsNullOrWhiteSpace(referer))
+                {
+                    if (Uri.TryCreate(referer.ToString(), UriKind.Absolute, out var refererUri))
+                    {
+                        return $"{refererUri.Scheme}://{refererUri.Authority}".TrimEnd('/');
+                    }
+                }
+
+                var host = httpContext.Request.Headers["X-Forwarded-Host"].FirstOrDefault()
+                        ?? httpContext.Request.Host.Value;
+
+                var proto = httpContext.Request.Headers["X-Forwarded-Proto"].FirstOrDefault()
+                         ?? httpContext.Request.Scheme;
+
+                if (!string.IsNullOrWhiteSpace(host) && !host.Contains("localhost", StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"{proto}://{host}".TrimEnd('/');
+                }
+            }
+
+            // 3. Environment-aware fallback: Production defaults to staff portal domain
+            var isDevelopment = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase);
+            if (!isDevelopment)
+            {
+                return "https://staff.trailblazer-academy.com";
+            }
+
+            return "http://localhost:3000";
         }
 
         private static string HashToken(string token)
