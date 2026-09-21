@@ -10,6 +10,14 @@ namespace Trailblazers.Backend.Core.Application.Interfaces
             string invitedByUserName,
             CancellationToken cancellationToken = default);
 
+        Task<StaffInvitationDto> InviteStudentAsync(
+            string email,
+            string fullName,
+            string targetExam,
+            Guid invitedByUserId,
+            string invitedByUserName,
+            CancellationToken cancellationToken = default);
+
         Task<ValidateInvitationResponseDto> ValidateInvitationAsync(
             string token,
             string email,

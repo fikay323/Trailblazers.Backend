@@ -1,5 +1,9 @@
 using System.Net.Mail;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Trailblazers.Backend.Core.Domain.Entities;
 using Trailblazers.Backend.Core.Domain.Repositories;
 using Trailblazers.Backend.Core.Application.Interfaces;
@@ -12,6 +16,10 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
         string Email,
         string PhoneNumber,
         string TargetExam,
+        string? GuardianName = null,
+        string? GuardianPhone = null,
+        string? GuardianEmail = null,
+        string? GuardianRelationship = null,
         string? DateOfBirth = null,
         string? Gender = null,
         string? Address = null,
@@ -26,6 +34,10 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
     public class SubmitRegistrationCommandHandler(
         ISubmissionRepository repository,
         IBackgroundTaskQueue taskQueue,
+        UserManager<ApplicationUser> userManager,
+        IEmailTemplateService templateService,
+        IHttpContextAccessor httpContextAccessor,
+        IConfiguration configuration,
         ILogger<SubmitRegistrationCommandHandler> logger)
     {
         public async Task<Submission> HandleAsync(SubmitRegistrationCommand command,
@@ -37,6 +49,10 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
             {
                 PhoneNumber = command.PhoneNumber.Trim(),
                 TargetExam = command.TargetExam.Trim(),
+                GuardianName = command.GuardianName?.Trim() ?? string.Empty,
+                GuardianPhone = command.GuardianPhone?.Trim() ?? string.Empty,
+                GuardianEmail = command.GuardianEmail?.Trim() ?? string.Empty,
+                GuardianRelationship = command.GuardianRelationship?.Trim() ?? string.Empty,
                 DateOfBirth = command.DateOfBirth?.Trim() ?? string.Empty,
                 Gender = command.Gender?.Trim() ?? string.Empty,
                 Address = command.Address?.Trim() ?? string.Empty,
@@ -45,7 +61,8 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
                 SubjectCombination = command.SubjectCombination?.Trim() ?? string.Empty,
                 ClassMode = command.ClassMode?.Trim() ?? string.Empty,
                 Referral = command.Referral?.Trim() ?? string.Empty,
-                Programmes = command.Programmes ?? []
+                Programmes = command.Programmes ?? [],
+                AccountCreated = false
             });
 
             var submission = new Submission
@@ -60,18 +77,86 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
             await repository.AddAsync(submission, cancellationToken);
             await repository.SaveChangesAsync(cancellationToken);
 
-            var body = $"Dear {submission.Name},\n\n" +
-                       $"Thank you for registering for the {command.TargetExam} preparation program with Trailblazers!\n" +
-                       $"We have received your details (Phone: {command.PhoneNumber}) and will get back to you shortly.\n\n" +
+            // 1. Send confirmation email to the student
+            var studentBody = $"Dear {submission.Name},\n\n" +
+                       $"Thank you for submitting your registration for the {command.TargetExam} preparation program with Trailblazers Academy!\n" +
+                       $"We have received your application. Our admissions team will review your information and follow up with you and your parent/guardian shortly.\n\n" +
                        $"Best regards,\n" +
-                       $"The Trailblazers Team";
+                       $"Trailblazers Academy Admissions Team";
 
             await taskQueue.QueueBackgroundWorkItemAsync(new SendEmailCommand(
                 submission.Email,
-                $"Welcome to Trailblazers - {command.TargetExam} Registration",
-                body));
+                $"Welcome to Trailblazers Academy - {command.TargetExam} Registration Received",
+                studentBody));
+
+            // 2. Notify all Administrators so they can follow up
+            try
+            {
+                var adminUsers = await userManager.GetUsersInRoleAsync("Admin");
+                var reviewUrl = $"{ResolveAdminPortalUrl()}/admin/submissions?tab=students";
+
+                var adminAlertHtml = templateService.RenderAdminNewRegistrationAlertEmail(
+                    studentName: submission.Name,
+                    studentEmail: submission.Email,
+                    studentPhone: command.PhoneNumber,
+                    targetExam: command.TargetExam,
+                    guardianName: command.GuardianName,
+                    guardianPhone: command.GuardianPhone,
+                    guardianEmail: command.GuardianEmail,
+                    guardianRelationship: command.GuardianRelationship,
+                    reviewUrl: reviewUrl
+                );
+
+                foreach (var admin in adminUsers)
+                {
+                    if (!string.IsNullOrWhiteSpace(admin.Email))
+                    {
+                        await taskQueue.QueueBackgroundWorkItemAsync(new SendEmailCommand(
+                            admin.Email,
+                            $"[New Registration] {submission.Name} ({command.TargetExam})",
+                            adminAlertHtml,
+                            IsHtml: true));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to queue admin alert emails for new registration {SubmissionId}", submission.Id);
+            }
 
             return submission;
+        }
+
+        private string ResolveAdminPortalUrl()
+        {
+            var envUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
+                      ?? Environment.GetEnvironmentVariable("APP_URL")
+                      ?? configuration["FrontendUrl"];
+
+            if (!string.IsNullOrWhiteSpace(envUrl))
+            {
+                return envUrl.TrimEnd('/');
+            }
+
+            var httpContext = httpContextAccessor.HttpContext;
+            if (httpContext != null)
+            {
+                if (httpContext.Request.Headers.TryGetValue("Origin", out var origin) && !string.IsNullOrWhiteSpace(origin))
+                {
+                    return origin.ToString().TrimEnd('/');
+                }
+
+                if (httpContext.Request.Headers.TryGetValue("Referer", out var referer) && !string.IsNullOrWhiteSpace(referer))
+                {
+                    if (Uri.TryCreate(referer.ToString(), UriKind.Absolute, out var refererUri))
+                    {
+                        return $"{refererUri.Scheme}://{refererUri.Authority}".TrimEnd('/');
+                    }
+                }
+            }
+
+            var isDev = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase);
+            return isDev ? "http://localhost:3000" : "https://staff.trailblazer-academy.com";
         }
 
         private void Validate(SubmitRegistrationCommand command)
@@ -90,6 +175,15 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
 
             if (string.IsNullOrWhiteSpace(command.TargetExam))
                 throw new ArgumentException("Target exam is required.", nameof(command.TargetExam));
+
+            if (string.IsNullOrWhiteSpace(command.GuardianName))
+                throw new ArgumentException("Parent/Guardian name is required.", nameof(command.GuardianName));
+
+            if (string.IsNullOrWhiteSpace(command.GuardianPhone) && string.IsNullOrWhiteSpace(command.GuardianEmail))
+                throw new ArgumentException("At least one parent/guardian contact method (phone number or email) is required.", nameof(command.GuardianPhone));
+
+            if (!string.IsNullOrWhiteSpace(command.GuardianEmail) && !IsValidEmail(command.GuardianEmail))
+                throw new ArgumentException("Guardian email format is invalid.", nameof(command.GuardianEmail));
         }
 
         private bool IsValidEmail(string email)

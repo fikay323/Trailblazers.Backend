@@ -14,8 +14,8 @@ namespace Trailblazers.Backend.Core.Application.Common.Commands
 
             try
             {
-                logger.LogInformation("Processing queued background email dispatch to {Recipient}", request.To);
-                await mailService.SendEmailAsync(request.To, request.Subject, request.Body);
+                logger.LogInformation("Processing queued background email dispatch to {Recipient} (HTML: {IsHtml})", request.To, request.IsHtml);
+                await mailService.SendEmailAsync(request.To, request.Subject, request.Body, request.IsHtml);
                 logger.LogInformation("Successfully sent queued email to {Recipient}", request.To);
             }
             catch (Exception ex)

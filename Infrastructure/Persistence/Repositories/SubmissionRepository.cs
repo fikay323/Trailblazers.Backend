@@ -11,6 +11,11 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Repositories
             await context.Submissions.AddAsync(submission, cancellationToken);
         }
 
+        public async Task<Submission?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            return await context.Submissions.FindAsync([id], cancellationToken);
+        }
+
         public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             return await context.SaveChangesAsync(cancellationToken);

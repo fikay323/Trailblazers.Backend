@@ -5,6 +5,7 @@ namespace Trailblazers.Backend.Core.Domain.Repositories
     public interface ISubmissionRepository
     {
         Task AddAsync(Submission submission, CancellationToken cancellationToken = default);
+        Task<Submission?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 
         Task<(List<Submission> Items, int TotalCount)> GetSubmissionsOffsetAsync(

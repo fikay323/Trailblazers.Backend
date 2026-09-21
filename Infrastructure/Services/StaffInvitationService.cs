@@ -130,6 +130,115 @@ namespace Trailblazers.Backend.Infrastructure.Services
             };
         }
 
+        public async Task<StaffInvitationDto> InviteStudentAsync(
+            string email,
+            string fullName,
+            string targetExam,
+            Guid invitedByUserId,
+            string invitedByUserName,
+            CancellationToken cancellationToken = default)
+        {
+            var cleanEmail = email.Trim().ToLowerInvariant();
+            var cleanName = string.IsNullOrWhiteSpace(fullName) ? "Student" : fullName.Trim();
+            var cleanExam = string.IsNullOrWhiteSpace(targetExam) ? "JAMB / WAEC" : targetExam.Trim();
+
+            // Verify if user already exists with student role
+            var existingUser = await userManager.FindByEmailAsync(cleanEmail);
+            if (existingUser != null)
+            {
+                var existingRoles = await userManager.GetRolesAsync(existingUser);
+                if (existingRoles.Contains("Student"))
+                {
+                    throw new InvalidOperationException($"A student account with email '{cleanEmail}' already exists.");
+                }
+            }
+
+            // Invalidate any prior unaccepted invitations for this email
+            var pendingInvites = await dbContext.StaffInvitations
+                .Where(x => x.Email == cleanEmail && !x.IsAccepted)
+                .ToListAsync(cancellationToken);
+
+            foreach (var p in pendingInvites)
+            {
+                p.ExpiresAt = DateTimeOffset.UtcNow; // Expire old tokens
+            }
+
+            // Generate secure random invitation token
+            var rawToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            var tokenHash = HashToken(rawToken);
+
+            var invitation = new StaffInvitation
+            {
+                Id = Guid.NewGuid(),
+                Email = cleanEmail,
+                FullName = cleanName,
+                Role = "Student",
+                TokenHash = tokenHash,
+                ExpiresAt = DateTimeOffset.UtcNow.AddHours(48),
+                InvitedByUserId = invitedByUserId,
+                InvitedByUserName = invitedByUserName,
+                IsAccepted = false,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+
+            dbContext.StaffInvitations.Add(invitation);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            // Construct invitation link
+            var frontendUrl = ResolveFrontendUrl();
+            var inviteUrl = $"{frontendUrl}/auth/accept-invite?token={rawToken}&email={Uri.EscapeDataString(cleanEmail)}";
+
+            bool emailSent = false;
+            string? emailStatusMessage = null;
+
+            try
+            {
+                var emailHtml = templateService.RenderStudentAccountActivationEmail(
+                    studentName: cleanName,
+                    targetExam: cleanExam,
+                    activationUrl: inviteUrl);
+
+                await mailService.SendEmailAsync(
+                    to: cleanEmail,
+                    subject: $"Activate Your Trailblazers Academy Student Account ({cleanExam})",
+                    body: emailHtml,
+                    isHtml: true);
+
+                emailSent = true;
+                emailStatusMessage = $"Student activation email successfully sent to {cleanEmail}.";
+                invitation.EmailDeliveryStatus = "Sent";
+                invitation.EmailDeliveryError = null;
+                logger.LogInformation("Student account activation email successfully dispatched to {Email}", cleanEmail);
+            }
+            catch (Exception ex)
+            {
+                emailSent = false;
+                var reason = ex is TimeoutException ? "Connection timed out (outbound SMTP ports may be blocked on Render)" : ex.Message;
+                emailStatusMessage = $"Email delivery failed: {reason}. You can copy and share the activation link directly.";
+                invitation.EmailDeliveryStatus = "Failed";
+                invitation.EmailDeliveryError = reason;
+                logger.LogWarning(ex, "Could not send student activation email to {Email}: {Reason}", cleanEmail, reason);
+            }
+
+            // Save status update
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            return new StaffInvitationDto
+            {
+                Id = invitation.Id,
+                Email = invitation.Email,
+                FullName = invitation.FullName,
+                Role = invitation.Role,
+                ExpiresAt = invitation.ExpiresAt,
+                InvitedByUserName = invitation.InvitedByUserName,
+                IsAccepted = invitation.IsAccepted,
+                CreatedAt = invitation.CreatedAt,
+                InviteUrl = inviteUrl,
+                EmailSent = emailSent,
+                EmailStatusMessage = emailStatusMessage
+            };
+        }
+
         public async Task<ValidateInvitationResponseDto> ValidateInvitationAsync(
             string token,
             string email,
