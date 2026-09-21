@@ -455,6 +455,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
             int attendancePresent,
             int attendanceLate,
             string? customRemarks,
+            string? portalUrl = null,
             string? logoUrl = null)
         {
             var cleanStudentName = WebUtility.HtmlEncode(studentName);
@@ -475,6 +476,13 @@ namespace Trailblazers.Backend.Infrastructure.Services
                                 <p style=""margin: 0; font-size: 13px; line-height: 20px; color: #e2e8f0; font-style: italic;"">
                                     &ldquo;{cleanRemarks}&rdquo;
                                 </p>
+                            </div>" : "";
+
+            var portalSection = !string.IsNullOrWhiteSpace(portalUrl) ? $@"
+                            <div align=""center"" style=""margin-bottom: 24px;"">
+                                <a href=""{WebUtility.HtmlEncode(portalUrl)}"" style=""display: inline-block; padding: 12px 28px; background-color: #ea580c; color: #ffffff; font-size: 13px; font-weight: 700; text-decoration: none; border-radius: 8px; box-shadow: 0 4px 14px rgba(234, 88, 12, 0.3);"">
+                                    Access Ward Online Portal &rarr;
+                                </a>
                             </div>" : "";
 
             return $@"
@@ -555,6 +563,8 @@ namespace Trailblazers.Backend.Infrastructure.Services
 
                             {remarksSection}
 
+                            {portalSection}
+
                             <p style=""margin: 0 0 20px; font-size: 13px; line-height: 20px; color: #94a3b8;"">
                                 We encourage parents and guardians to review these results with their ward to foster consistent preparation and punctuality. For any inquiries regarding performance or tutoring assistance, please reach out to our academic team.
                             </p>
@@ -582,5 +592,312 @@ namespace Trailblazers.Backend.Infrastructure.Services
 </body>
 </html>";
         }
+
+        public string RenderAnnouncementBroadcastEmail(
+            string recipientName,
+            string title,
+            string content,
+            string priorityName,
+            string authorName,
+            DateTimeOffset publishedAt,
+            string portalUrl,
+            string? logoUrl = null)
+        {
+            var cleanRecipient = WebUtility.HtmlEncode(recipientName);
+            var cleanTitle = WebUtility.HtmlEncode(title);
+            var cleanContent = WebUtility.HtmlEncode(content).Replace("\n", "<br/>");
+            var cleanAuthor = WebUtility.HtmlEncode(authorName);
+            var cleanPortalUrl = WebUtility.HtmlEncode(portalUrl);
+            var resolvedLogoUrl = !string.IsNullOrWhiteSpace(logoUrl)
+                ? WebUtility.HtmlEncode(logoUrl)
+                : "https://trailblazer-academy.com/trailblazer.jpeg";
+
+            string badgeBg;
+            string badgeColor;
+            switch (priorityName.ToLowerInvariant())
+            {
+                case "urgent":
+                    badgeBg = "#450a0a";
+                    badgeColor = "#f87171";
+                    break;
+                case "feereminder":
+                    badgeBg = "#451a03";
+                    badgeColor = "#fbbf24";
+                    break;
+                case "holiday":
+                    badgeBg = "#172554";
+                    badgeColor = "#60a5fa";
+                    break;
+                case "mockexamschedule":
+                    badgeBg = "#3b0764";
+                    badgeColor = "#c084fc";
+                    break;
+                default:
+                    badgeBg = "#431407";
+                    badgeColor = "#fb923c";
+                    break;
+            }
+
+            return $@"
+<!DOCTYPE html>
+<html lang=""en"">
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>{cleanTitle} - Trailblazers Academy Noticeboard</title>
+</head>
+<body style=""margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #090d16; color: #f1f5f9;"">
+    <table width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""background-color: #090d16; padding: 40px 16px;"">
+        <tr>
+            <td align=""center"">
+                <table width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""max-width: 600px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);"">
+                    <!-- Header -->
+                    <tr>
+                        <td align=""center"" style=""padding: 32px 28px 24px; border-bottom: 1px solid #1e293b; background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);"">
+                            <img src=""{resolvedLogoUrl}"" alt=""Trailblazers Academy"" width=""60"" height=""60"" style=""border-radius: 50%; display: block; border: 2px solid #f97316; margin-bottom: 12px; object-fit: cover;"">
+                            <h1 style=""margin: 0; font-size: 20px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;"">Trailblazers Academy & Edukonsult</h1>
+                            <p style=""margin: 4px 0 0; font-size: 12px; color: #f97316; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;"">Official Academy Noticeboard</p>
+                        </td>
+                    </tr>
+
+                    <!-- Body Content -->
+                    <tr>
+                        <td style=""padding: 32px 28px;"">
+                            <div style=""display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; background-color: {badgeBg}; color: {badgeColor}; margin-bottom: 16px; border: 1px solid {badgeColor}40;"">
+                                {WebUtility.HtmlEncode(priorityName)} NOTICE
+                            </div>
+
+                            <h2 style=""margin: 0 0 8px; font-size: 20px; font-weight: 800; color: #ffffff; line-height: 28px;"">
+                                {cleanTitle}
+                            </h2>
+
+                            <p style=""margin: 0 0 24px; font-size: 12px; color: #94a3b8;"">
+                                Published by <strong>{cleanAuthor}</strong> &bull; {publishedAt:MMM dd, yyyy}
+                            </p>
+
+                            <div style=""background-color: #090d16; border: 1px solid #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 28px;"">
+                                <p style=""margin: 0; font-size: 14px; line-height: 24px; color: #e2e8f0;"">
+                                    {cleanContent}
+                                </p>
+                            </div>
+
+                            <div align=""center"" style=""margin-bottom: 24px;"">
+                                <a href=""{cleanPortalUrl}"" style=""display: inline-block; padding: 12px 28px; background-color: #ea580c; color: #ffffff; font-size: 13px; font-weight: 700; text-decoration: none; border-radius: 8px; box-shadow: 0 4px 14px rgba(234, 88, 12, 0.3);"">
+                                    Open Student Portal &rarr;
+                                </a>
+                            </div>
+
+                            <p style=""margin: 0; font-size: 12px; line-height: 18px; color: #64748b; text-align: center;"">
+                                This is an official notice broadcast sent to registered students and stakeholders of Trailblazers Academy.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td align=""center"" style=""padding: 20px 28px; background-color: #020617; border-top: 1px solid #1e293b;"">
+                            <p style=""margin: 0 0 4px; font-size: 11px; color: #94a3b8; font-weight: 600;"">
+                                Trailblazers Academy & Edukonsult
+                            </p>
+                            <p style=""margin: 0 0 4px; font-size: 10px; color: #475569;"">
+                                Opp. Ajorosun Garden City, Ijaye-Iseyin Road, Odo Oba Moniya, Ibadan
+                            </p>
+                            <p style=""margin: 0; font-size: 10px; color: #f97316;"">
+                                +234 816 599 9425 &bull; info@trailblazer-academy.com
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>";
+        }
+
+        public string RenderGuardianInquiryAdminAlertEmail(
+            string studentName,
+            string studentEmail,
+            string guardianName,
+            string guardianContact,
+            string subject,
+            string message,
+            string? logoUrl = null)
+        {
+            var cleanStudent = WebUtility.HtmlEncode(studentName);
+            var cleanStudentEmail = WebUtility.HtmlEncode(studentEmail);
+            var cleanGuardian = string.IsNullOrWhiteSpace(guardianName) ? "Parent / Guardian" : WebUtility.HtmlEncode(guardianName);
+            var cleanContact = WebUtility.HtmlEncode(guardianContact);
+            var cleanSubject = WebUtility.HtmlEncode(subject);
+            var cleanMessage = WebUtility.HtmlEncode(message);
+            var resolvedLogoUrl = !string.IsNullOrWhiteSpace(logoUrl)
+                ? WebUtility.HtmlEncode(logoUrl)
+                : "https://trailblazer-academy.com/trailblazer.jpeg";
+
+            return $@"
+<!DOCTYPE html>
+<html lang=""en"">
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>Guardian Inquiry - {cleanStudent}</title>
+</head>
+<body style=""margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #090d16; color: #f1f5f9;"">
+    <table width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""background-color: #090d16; padding: 40px 16px;"">
+        <tr>
+            <td align=""center"">
+                <table width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""max-width: 600px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);"">
+                    <!-- Header -->
+                    <tr>
+                        <td align=""center"" style=""padding: 32px 28px 24px; border-bottom: 1px solid #1e293b; background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);"">
+                            <img src=""{resolvedLogoUrl}"" alt=""Trailblazers Academy"" width=""56"" height=""56"" style=""border-radius: 50%; display: block; border: 2px solid #f97316; margin-bottom: 12px; object-fit: cover;"">
+                            <h1 style=""margin: 0; font-size: 20px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;"">Trailblazers Academy & Edukonsult</h1>
+                            <p style=""margin: 4px 0 0; font-size: 12px; color: #38bdf8; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;"">Parent / Guardian Portal Inquiry</p>
+                        </td>
+                    </tr>
+
+                    <!-- Body Content -->
+                    <tr>
+                        <td style=""padding: 32px 28px;"">
+                            <div style=""display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; background-color: rgba(56, 189, 248, 0.15); color: #38bdf8; margin-bottom: 16px; border: 1px solid rgba(56, 189, 248, 0.3);"">
+                                New Guardian Message
+                            </div>
+
+                            <h2 style=""margin: 0 0 16px; font-size: 18px; font-weight: 800; color: #ffffff;"">
+                                Topic: {cleanSubject}
+                            </h2>
+
+                            <!-- Details Table -->
+                            <table width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""background-color: #020617; border: 1px solid #1e293b; border-radius: 10px; margin-bottom: 20px; font-size: 13px;"">
+                                <tr>
+                                    <td style=""padding: 10px 16px; color: #94a3b8; border-bottom: 1px solid #1e293b; width: 35%;"">Student Name</td>
+                                    <td style=""padding: 10px 16px; color: #ffffff; font-weight: 600; border-bottom: 1px solid #1e293b;"">{cleanStudent}</td>
+                                </tr>
+                                <tr>
+                                    <td style=""padding: 10px 16px; color: #94a3b8; border-bottom: 1px solid #1e293b;"">Student Email</td>
+                                    <td style=""padding: 10px 16px; color: #cbd5e1; border-bottom: 1px solid #1e293b;"">{cleanStudentEmail}</td>
+                                </tr>
+                                <tr>
+                                    <td style=""padding: 10px 16px; color: #94a3b8; border-bottom: 1px solid #1e293b;"">Guardian Name</td>
+                                    <td style=""padding: 10px 16px; color: #ffffff; font-weight: 600; border-bottom: 1px solid #1e293b;"">{cleanGuardian}</td>
+                                </tr>
+                                <tr>
+                                    <td style=""padding: 10px 16px; color: #94a3b8;"">Guardian Contact</td>
+                                    <td style=""padding: 10px 16px; color: #f97316; font-weight: 600;"">{cleanContact}</td>
+                                </tr>
+                            </table>
+
+                            <!-- Message Content -->
+                            <div style=""background-color: #090d16; border: 1px solid #1e293b; border-radius: 10px; padding: 20px; margin-bottom: 24px;"">
+                                <h4 style=""margin: 0 0 8px; font-size: 12px; font-weight: 700; color: #94a3b8; text-transform: uppercase;"">Message:</h4>
+                                <p style=""margin: 0; font-size: 14px; line-height: 22px; color: #e2e8f0; white-space: pre-wrap;"">{cleanMessage}</p>
+                            </div>
+
+                            <p style=""margin: 0; font-size: 12px; line-height: 18px; color: #64748b;"">
+                                Please follow up directly with the parent or guardian via the contact details provided above.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td align=""center"" style=""padding: 16px 28px; background-color: #020617; border-top: 1px solid #1e293b;"">
+                            <p style=""margin: 0; font-size: 11px; color: #64748b;"">
+                                Trailblazers Academy Administrative Alert System
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>";
+        }
+
+        public string RenderGuardianInquiryConfirmationEmail(
+            string guardianName,
+            string studentName,
+            string subject,
+            string message,
+            string? logoUrl = null)
+        {
+            var cleanGuardian = string.IsNullOrWhiteSpace(guardianName) ? "Parent / Guardian" : WebUtility.HtmlEncode(guardianName);
+            var cleanStudent = WebUtility.HtmlEncode(studentName);
+            var cleanSubject = WebUtility.HtmlEncode(subject);
+            var cleanMessage = WebUtility.HtmlEncode(message);
+            var resolvedLogoUrl = !string.IsNullOrWhiteSpace(logoUrl)
+                ? WebUtility.HtmlEncode(logoUrl)
+                : "https://trailblazer-academy.com/trailblazer.jpeg";
+
+            return $@"
+<!DOCTYPE html>
+<html lang=""en"">
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>Inquiry Received - Trailblazers Academy</title>
+</head>
+<body style=""margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #090d16; color: #f1f5f9;"">
+    <table width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""background-color: #090d16; padding: 40px 16px;"">
+        <tr>
+            <td align=""center"">
+                <table width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""max-width: 600px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);"">
+                    <!-- Header -->
+                    <tr>
+                        <td align=""center"" style=""padding: 32px 28px 24px; border-bottom: 1px solid #1e293b; background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);"">
+                            <img src=""{resolvedLogoUrl}"" alt=""Trailblazers Academy"" width=""56"" height=""56"" style=""border-radius: 50%; display: block; border: 2px solid #f97316; margin-bottom: 12px; object-fit: cover;"">
+                            <h1 style=""margin: 0; font-size: 20px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;"">Trailblazers Academy & Edukonsult</h1>
+                            <p style=""margin: 4px 0 0; font-size: 12px; color: #10b981; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;"">Inquiry Received</p>
+                        </td>
+                    </tr>
+
+                    <!-- Body Content -->
+                    <tr>
+                        <td style=""padding: 32px 28px;"">
+                            <h2 style=""margin: 0 0 12px; font-size: 18px; font-weight: 700; color: #ffffff;"">
+                                Dear {cleanGuardian},
+                            </h2>
+
+                            <p style=""margin: 0 0 16px; font-size: 14px; line-height: 22px; color: #cbd5e1;"">
+                                Thank you for contacting Trailblazers Academy regarding your ward, <strong style=""color: #ffffff;"">{cleanStudent}</strong>.
+                                We have received your inquiry regarding <strong>{cleanSubject}</strong> and our academic/administrative team will review it and get back to you promptly.
+                            </p>
+
+                            <!-- Copy of message -->
+                            <div style=""background-color: #090d16; border: 1px solid #1e293b; border-radius: 10px; padding: 16px 20px; margin-bottom: 24px;"">
+                                <h4 style=""margin: 0 0 6px; font-size: 11px; font-weight: 700; color: #94a3b8; text-transform: uppercase;"">Your Message Summary:</h4>
+                                <p style=""margin: 0; font-size: 13px; line-height: 20px; color: #cbd5e1; font-style: italic; white-space: pre-wrap;"">&ldquo;{cleanMessage}&rdquo;</p>
+                            </div>
+
+                            <p style=""margin: 0; font-size: 13px; line-height: 20px; color: #94a3b8;"">
+                                Warm regards,<br>
+                                <strong style=""color: #ffffff;"">Trailblazers Academy Support & Academic Team</strong>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td align=""center"" style=""padding: 20px 28px; background-color: #020617; border-top: 1px solid #1e293b;"">
+                            <p style=""margin: 0 0 4px; font-size: 11px; color: #94a3b8; font-weight: 600;"">
+                                Trailblazers Academy & Edukonsult
+                            </p>
+                            <p style=""margin: 0 0 4px; font-size: 10px; color: #475569;"">
+                                Opp. Ajorosun Garden City, Ijaye-Iseyin Road, Odo Oba Moniya, Ibadan
+                            </p>
+                            <p style=""margin: 0; font-size: 10px; color: #f97316;"">
+                                +234 816 599 9425 &bull; info@trailblazer-academy.com
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>";
+        }
     }
 }
+

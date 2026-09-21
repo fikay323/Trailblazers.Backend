@@ -12,6 +12,7 @@ using Trailblazers.Backend.Core.Domain.Repositories;
 using Trailblazers.Backend.Infrastructure.Persistence;
 using Trailblazers.Backend.Infrastructure.Persistence.Repositories;
 using Trailblazers.Backend.Infrastructure.Services;
+using Trailblazers.Backend.Core.Application.Features.GuardianPortal.Interfaces;
 using Trailblazers.Backend.WebApi.Authentication;
 
 DotNetEnv.Env.Load();
@@ -156,6 +157,8 @@ builder.Services.AddScoped<IEmailTemplateService, EmailTemplateService>();
 builder.Services.AddScoped<IStaffInvitationService, StaffInvitationService>();
 builder.Services.AddScoped<IStaffManagementService, StaffManagementService>();
 builder.Services.AddScoped<IGuardianReportService, GuardianReportService>();
+builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
+builder.Services.AddScoped<IGuardianPortalService, GuardianPortalService>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>(

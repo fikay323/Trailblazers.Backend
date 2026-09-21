@@ -16,6 +16,7 @@ namespace Trailblazers.Backend.Infrastructure.Persistence
         public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
         public DbSet<AttendanceSetting> AttendanceSettings => Set<AttendanceSetting>();
         public DbSet<StaffInvitation> StaffInvitations => Set<StaffInvitation>();
+        public DbSet<Announcement> Announcements => Set<Announcement>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

@@ -44,6 +44,34 @@ namespace Trailblazers.Backend.Core.Application.Interfaces
             int attendancePresent,
             int attendanceLate,
             string? customRemarks,
+            string? portalUrl = null,
+            string? logoUrl = null);
+
+        string RenderAnnouncementBroadcastEmail(
+            string recipientName,
+            string title,
+            string content,
+            string priorityName,
+            string authorName,
+            DateTimeOffset publishedAt,
+            string portalUrl,
+            string? logoUrl = null);
+
+        string RenderGuardianInquiryAdminAlertEmail(
+            string studentName,
+            string studentEmail,
+            string guardianName,
+            string guardianContact,
+            string subject,
+            string message,
+            string? logoUrl = null);
+
+        string RenderGuardianInquiryConfirmationEmail(
+            string guardianName,
+            string studentName,
+            string subject,
+            string message,
             string? logoUrl = null);
     }
 }
+

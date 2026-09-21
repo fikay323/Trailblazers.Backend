@@ -13,6 +13,10 @@ using Trailblazers.Backend.Core.Application.Interfaces;
 using Trailblazers.Backend.Core.Domain.Entities;
 using Trailblazers.Backend.Infrastructure.Persistence;
 
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using Trailblazers.Backend.Core.Application.Features.GuardianPortal.Interfaces;
+
 namespace Trailblazers.Backend.Infrastructure.Services
 {
     public class GuardianReportService(
@@ -21,8 +25,43 @@ namespace Trailblazers.Backend.Infrastructure.Services
         IExamSessionRepository sessionRepository,
         IEmailTemplateService templateService,
         IBackgroundTaskQueue taskQueue,
+        IGuardianPortalService portalService,
+        IConfiguration configuration,
+        IHttpContextAccessor httpContextAccessor,
         ILogger<GuardianReportService> logger) : IGuardianReportService
     {
+        private string ResolvePortalBaseUrl()
+        {
+            var envUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
+                      ?? Environment.GetEnvironmentVariable("APP_URL")
+                      ?? configuration["FrontendUrl"];
+
+            if (!string.IsNullOrWhiteSpace(envUrl))
+            {
+                return envUrl.TrimEnd('/');
+            }
+
+            var httpContext = httpContextAccessor.HttpContext;
+            if (httpContext != null)
+            {
+                if (httpContext.Request.Headers.TryGetValue("Origin", out var origin) && !string.IsNullOrWhiteSpace(origin))
+                {
+                    return origin.ToString().TrimEnd('/');
+                }
+
+                if (httpContext.Request.Headers.TryGetValue("Referer", out var referer) && !string.IsNullOrWhiteSpace(referer))
+                {
+                    if (Uri.TryCreate(referer.ToString(), UriKind.Absolute, out var refererUri))
+                    {
+                        return $"{refererUri.Scheme}://{refererUri.Authority}".TrimEnd('/');
+                    }
+                }
+            }
+
+            var isDev = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase);
+            return isDev ? "http://localhost:3000" : "https://trailblazer-academy.com";
+        }
+
         public async Task<GuardianReportPreviewDto> GetReportPreviewAsync(
             string studentEmail,
             DateTimeOffset startDate,
@@ -151,6 +190,9 @@ namespace Trailblazers.Backend.Infrastructure.Services
             bool smsSent = false;
             var deliveredChannels = new List<string>();
 
+            var portalToken = portalService.GenerateAccessToken(preview.StudentEmail);
+            var portalUrl = $"{ResolvePortalBaseUrl()}/guardian/portal?token={portalToken}";
+
             // 1. Email Channel
             if (string.Equals(request.Channel, "Email", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(request.Channel, "Both", StringComparison.OrdinalIgnoreCase))
@@ -171,7 +213,8 @@ namespace Trailblazers.Backend.Infrastructure.Services
                     passRate: preview.PassRatePercentage,
                     attendancePresent: preview.AttendancePresentDays,
                     attendanceLate: preview.AttendanceLateDays,
-                    customRemarks: request.CustomRemarks);
+                    customRemarks: request.CustomRemarks,
+                    portalUrl: portalUrl);
 
                 await taskQueue.QueueBackgroundWorkItemAsync(new SendEmailCommand(
                     To: guardianEmail,
@@ -196,7 +239,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
                 var remarksSnippet = !string.IsNullOrWhiteSpace(request.CustomRemarks) ? $" Note: {request.CustomRemarks.Trim()}." : "";
                 var smsText = $"Trailblazers Academy Report for {preview.StudentName} ({request.StartDate:MMM d} - {request.EndDate:MMM d}): " +
                               $"Avg Score: {preview.AveragePercentage:F1}%, {preview.TotalTestsTaken} tests completed. " +
-                              $"Attendance: {preview.AttendancePresentDays} days present.{remarksSnippet} Enquiries: 08165999425";
+                              $"Attendance: {preview.AttendancePresentDays} days present.{remarksSnippet} Portal: {portalUrl} Enquiries: 08165999425";
 
                 // In production, send to SMS gateway; logged to queue
                 logger.LogInformation("Guardian report card SMS prepared for {Phone}: {Message}", guardianPhone, smsText);
