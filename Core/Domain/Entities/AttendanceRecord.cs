@@ -21,10 +21,15 @@ namespace Trailblazers.Backend.Core.Domain.Entities
         public ApplicationUser Student { get; set; } = null!;
         public DateOnly Date { get; set; }
         public DateTimeOffset ClockInTime { get; set; } = DateTimeOffset.UtcNow;
+        public DateTimeOffset? ClockOutTime { get; set; }
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
         public double? AccuracyMeters { get; set; }
         public double? DistanceMeters { get; set; }
+        public double? ClockOutLatitude { get; set; }
+        public double? ClockOutLongitude { get; set; }
+        public double? ClockOutAccuracyMeters { get; set; }
+        public double? ClockOutDistanceMeters { get; set; }
         public AttendanceStatus Status { get; set; } = AttendanceStatus.Present;
         public AttendanceVerificationType VerificationType { get; set; } = AttendanceVerificationType.Geolocated;
         public Guid? MarkedByUserId { get; set; }

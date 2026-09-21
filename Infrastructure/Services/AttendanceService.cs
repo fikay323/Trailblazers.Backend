@@ -128,6 +128,92 @@ namespace Trailblazers.Backend.Infrastructure.Services
             return MapToDto(newRecord);
         }
 
+        public async Task<AttendanceRecordDto> ClockOutAsync(Guid studentId, ClockInRequestDto request)
+        {
+            var student = await userManager.FindByIdAsync(studentId.ToString())
+                ?? throw new KeyNotFoundException("Student record not found.");
+
+            if (!student.IsActive)
+            {
+                throw new InvalidOperationException("Your student account is currently suspended. Please contact the administration.");
+            }
+
+            var settings = await GetOrCreateSettingsInternalAsync();
+
+            // 1. Authenticity Validation: Physical GPS Bounds
+            if (request.Latitude < -90.0 || request.Latitude > 90.0 ||
+                request.Longitude < -180.0 || request.Longitude > 180.0 ||
+                (Math.Abs(request.Latitude) < 0.0001 && Math.Abs(request.Longitude) < 0.0001))
+            {
+                throw new ArgumentException("Invalid GPS coordinate values detected.");
+            }
+
+            // 2. Authenticity Validation: Hardware GPS Accuracy Threshold
+            if (request.AccuracyMeters <= 0 || request.AccuracyMeters > settings.MaxAllowedAccuracyMeters)
+            {
+                throw new InvalidOperationException(
+                    $"GPS accuracy ({Math.Round(request.AccuracyMeters)}m) exceeds allowable threshold ({settings.MaxAllowedAccuracyMeters}m). " +
+                    "Authentic hardware GPS signal is required. Please ensure High Accuracy is enabled.");
+            }
+
+            // 3. Authenticity Validation: Timestamp Freshness
+            var timeDifference = (DateTimeOffset.UtcNow - request.ClientTimestamp).Duration();
+            if (timeDifference > TimeSpan.FromMinutes(3))
+            {
+                throw new InvalidOperationException("GPS coordinate timestamp is expired. Please acquire a fresh location reading.");
+            }
+
+            // 4. Physical Geofence Verification
+            var distance = CalculateDistanceInMeters(
+                request.Latitude,
+                request.Longitude,
+                settings.CenterLatitude,
+                settings.CenterLongitude);
+
+            if (distance > settings.AllowedRadiusMeters)
+            {
+                logger.LogWarning("Clock-out geofence breach for student {Email}: {Distance}m away (limit: {Radius}m)",
+                    student.Email, Math.Round(distance), settings.AllowedRadiusMeters);
+
+                throw new InvalidOperationException(
+                    $"Physical presence required. You are {Math.Round(distance)} meters outside the academy center. " +
+                    "Please clock out while inside the academy premises.");
+            }
+
+            // 5. Get Today's Record
+            var localNow = DateTimeOffset.UtcNow.ToOffset(LocalTimezoneOffset);
+            var todayDate = DateOnly.FromDateTime(localNow.DateTime);
+
+            var existingRecord = await dbContext.AttendanceRecords
+                .Include(r => r.Student)
+                .FirstOrDefaultAsync(r => r.StudentId == studentId && r.Date == todayDate);
+
+            if (existingRecord == null)
+            {
+                throw new InvalidOperationException("No check-in record found for today. You must check in before checking out.");
+            }
+
+            if (existingRecord.ClockOutTime != null)
+            {
+                // Already clocked out
+                return MapToDto(existingRecord);
+            }
+
+            existingRecord.ClockOutTime = DateTimeOffset.UtcNow;
+            existingRecord.ClockOutLatitude = request.Latitude;
+            existingRecord.ClockOutLongitude = request.Longitude;
+            existingRecord.ClockOutAccuracyMeters = Math.Round(request.AccuracyMeters, 1);
+            existingRecord.ClockOutDistanceMeters = Math.Round(distance, 1);
+            existingRecord.UpdatedAt = DateTimeOffset.UtcNow;
+
+            await dbContext.SaveChangesAsync();
+
+            logger.LogInformation("Student {Email} successfully clocked out ({Distance}m)",
+                student.Email, Math.Round(distance, 1));
+
+            return MapToDto(existingRecord);
+        }
+
         public async Task<StudentAttendanceStatsDto> GetStudentTodayStatusAsync(Guid studentId)
         {
             var localNow = DateTimeOffset.UtcNow.ToOffset(LocalTimezoneOffset);
@@ -169,6 +255,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
             {
                 Date = todayDate,
                 HasClockedInToday = todayRecord != null && todayRecord.Status != AttendanceStatus.Absent,
+                HasClockedOutToday = todayRecord?.ClockOutTime != null,
                 TodayRecord = todayRecord != null ? MapToDto(todayRecord) : null,
                 TotalDays = totalDays,
                 PresentDays = presentDays,
@@ -205,6 +292,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
                     IsActive = s.IsActive,
                     Status = record?.Status ?? AttendanceStatus.Absent,
                     ClockInTime = record?.ClockInTime,
+                    ClockOutTime = record?.ClockOutTime,
                     DistanceMeters = record?.DistanceMeters,
                     AccuracyMeters = record?.AccuracyMeters,
                     VerificationType = record?.VerificationType,
@@ -358,6 +446,81 @@ namespace Trailblazers.Backend.Infrastructure.Services
 
         private static double ToRadians(double degrees) => degrees * (Math.PI / 180.0);
 
+        public async Task<byte[]> GenerateAttendanceCsvReportAsync(
+            DateOnly? startDate,
+            DateOnly? endDate,
+            Guid? studentId,
+            string? searchTerm)
+        {
+            var query = dbContext.AttendanceRecords
+                .Include(r => r.Student)
+                .AsNoTracking();
+
+            if (startDate.HasValue)
+            {
+                query = query.Where(r => r.Date >= startDate.Value);
+            }
+
+            if (endDate.HasValue)
+            {
+                query = query.Where(r => r.Date <= endDate.Value);
+            }
+
+            if (studentId.HasValue && studentId.Value != Guid.Empty)
+            {
+                query = query.Where(r => r.StudentId == studentId.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var term = searchTerm.Trim().ToLowerInvariant();
+                query = query.Where(r => r.Student.FullName.ToLower().Contains(term) ||
+                                         (r.Student.Email != null && r.Student.Email.ToLower().Contains(term)));
+            }
+
+            var records = await query
+                .OrderByDescending(r => r.Date)
+                .ThenBy(r => r.ClockInTime)
+                .ToListAsync();
+
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("\"Record ID\",\"Student Name\",\"Email\",\"Phone Number\",\"Date\",\"Clock-In (WAT)\",\"Clock-Out (WAT)\",\"Duration (Hours)\",\"Status\",\"Verification Method\",\"Distance from Center (m)\",\"Remarks\"");
+
+            foreach (var r in records)
+            {
+                var localIn = r.ClockInTime.ToOffset(LocalTimezoneOffset).ToString("hh:mm:ss tt");
+                var localOut = r.ClockOutTime.HasValue
+                    ? r.ClockOutTime.Value.ToOffset(LocalTimezoneOffset).ToString("hh:mm:ss tt")
+                    : "N/A";
+
+                var durationStr = "N/A";
+                if (r.ClockOutTime.HasValue)
+                {
+                    var duration = r.ClockOutTime.Value - r.ClockInTime;
+                    durationStr = $"{Math.Max(0, duration.TotalHours):F2}";
+                }
+
+                var studentName = EscapeCsv(r.Student?.FullName ?? "Student");
+                var email = EscapeCsv(r.Student?.Email ?? string.Empty);
+                var phone = EscapeCsv(r.Student?.PhoneNumber ?? string.Empty);
+                var dateStr = r.Date.ToString("yyyy-MM-dd");
+                var status = r.Status.ToString();
+                var verification = r.VerificationType.ToString();
+                var distance = r.DistanceMeters.HasValue ? $"{r.DistanceMeters.Value:F1}" : "N/A";
+                var remarks = EscapeCsv(r.Remarks ?? string.Empty);
+
+                sb.AppendLine($"\"{r.Id}\",\"{studentName}\",\"{email}\",\"{phone}\",\"{dateStr}\",\"{localIn}\",\"{localOut}\",\"{durationStr}\",\"{status}\",\"{verification}\",\"{distance}\",\"{remarks}\"");
+            }
+
+            return System.Text.Encoding.UTF8.GetBytes(sb.ToString());
+        }
+
+        private static string EscapeCsv(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            return value.Replace("\"", "\"\"");
+        }
+
         private static AttendanceRecordDto MapToDto(AttendanceRecord entity) => new()
         {
             Id = entity.Id,
@@ -367,10 +530,15 @@ namespace Trailblazers.Backend.Infrastructure.Services
             StudentPhone = entity.Student?.PhoneNumber,
             Date = entity.Date,
             ClockInTime = entity.ClockInTime,
+            ClockOutTime = entity.ClockOutTime,
             Latitude = entity.Latitude,
             Longitude = entity.Longitude,
             AccuracyMeters = entity.AccuracyMeters,
             DistanceMeters = entity.DistanceMeters,
+            ClockOutLatitude = entity.ClockOutLatitude,
+            ClockOutLongitude = entity.ClockOutLongitude,
+            ClockOutAccuracyMeters = entity.ClockOutAccuracyMeters,
+            ClockOutDistanceMeters = entity.ClockOutDistanceMeters,
             Status = entity.Status,
             VerificationType = entity.VerificationType,
             MarkedByUserName = entity.MarkedByUserName,

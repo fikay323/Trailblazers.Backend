@@ -19,10 +19,15 @@ namespace Trailblazers.Backend.Core.Application.Features.Attendance.Dtos
         public string? StudentPhone { get; set; }
         public DateOnly Date { get; set; }
         public DateTimeOffset ClockInTime { get; set; }
+        public DateTimeOffset? ClockOutTime { get; set; }
         public double? Latitude { get; set; }
         public double? Longitude { get; set; }
         public double? AccuracyMeters { get; set; }
         public double? DistanceMeters { get; set; }
+        public double? ClockOutLatitude { get; set; }
+        public double? ClockOutLongitude { get; set; }
+        public double? ClockOutAccuracyMeters { get; set; }
+        public double? ClockOutDistanceMeters { get; set; }
         public AttendanceStatus Status { get; set; }
         public AttendanceVerificationType VerificationType { get; set; }
         public string? MarkedByUserName { get; set; }
@@ -38,6 +43,7 @@ namespace Trailblazers.Backend.Core.Application.Features.Attendance.Dtos
         public bool IsActive { get; set; }
         public AttendanceStatus Status { get; set; }
         public DateTimeOffset? ClockInTime { get; set; }
+        public DateTimeOffset? ClockOutTime { get; set; }
         public double? DistanceMeters { get; set; }
         public double? AccuracyMeters { get; set; }
         public AttendanceVerificationType? VerificationType { get; set; }
@@ -82,6 +88,7 @@ namespace Trailblazers.Backend.Core.Application.Features.Attendance.Dtos
     {
         public DateOnly Date { get; set; }
         public bool HasClockedInToday { get; set; }
+        public bool HasClockedOutToday { get; set; }
         public AttendanceRecordDto? TodayRecord { get; set; }
         public int TotalDays { get; set; }
         public int PresentDays { get; set; }
@@ -89,5 +96,13 @@ namespace Trailblazers.Backend.Core.Application.Features.Attendance.Dtos
         public int AbsentDays { get; set; }
         public double AttendanceRate { get; set; }
         public int PunctualStreak { get; set; }
+    }
+
+    public class AttendanceReportQueryDto
+    {
+        public DateOnly? StartDate { get; set; }
+        public DateOnly? EndDate { get; set; }
+        public Guid? StudentId { get; set; }
+        public string? SearchTerm { get; set; }
     }
 }

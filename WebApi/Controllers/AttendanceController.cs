@@ -46,6 +46,39 @@ namespace Trailblazers.Backend.WebApi.Controllers
             }
         }
 
+        // 1b. Student Clock-Out with GPS coordinates
+        [HttpPost("clock-out")]
+        [Authorize]
+        public async Task<IActionResult> ClockOut([FromBody] ClockInRequestDto request)
+        {
+            var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                            ?? User.FindFirstValue("sub");
+
+            if (string.IsNullOrEmpty(userIdStr) || !Guid.TryParse(userIdStr, out var studentId))
+            {
+                return Unauthorized(new { error = "Valid authenticated student session required." });
+            }
+
+            try
+            {
+                var record = await attendanceService.ClockOutAsync(studentId, request);
+                return Ok(record);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Unexpected error during attendance clock-out for student {Id}", studentId);
+                return StatusCode(500, new { error = "An error occurred while registering clock-out. Please try again." });
+            }
+        }
+
         // 2. Student Check-In Status Today & History Stats
         [HttpGet("my-today")]
         [Authorize]
@@ -137,6 +170,42 @@ namespace Trailblazers.Backend.WebApi.Controllers
             catch (Exception ex)
             {
                 return BadRequest(new { error = ex.Message });
+            }
+        }
+
+        // 7. Staff & Admin: Export Attendance CSV Report
+        [HttpGet("report/export")]
+        [ServiceFilter(typeof(ApiKeyAuthFilter))]
+        public async Task<IActionResult> ExportAttendanceReport(
+            [FromQuery] string? startDate,
+            [FromQuery] string? endDate,
+            [FromQuery] Guid? studentId,
+            [FromQuery] string? searchTerm)
+        {
+            DateOnly? sDate = null;
+            if (!string.IsNullOrWhiteSpace(startDate) && DateOnly.TryParse(startDate, out var parsedStart))
+            {
+                sDate = parsedStart;
+            }
+
+            DateOnly? eDate = null;
+            if (!string.IsNullOrWhiteSpace(endDate) && DateOnly.TryParse(endDate, out var parsedEnd))
+            {
+                eDate = parsedEnd;
+            }
+
+            try
+            {
+                var csvBytes = await attendanceService.GenerateAttendanceCsvReportAsync(sDate, eDate, studentId, searchTerm);
+                var startLabel = sDate?.ToString("yyyyMMdd") ?? "all";
+                var endLabel = eDate?.ToString("yyyyMMdd") ?? "latest";
+                var fileName = $"trailblazers_attendance_report_{startLabel}_{endLabel}.csv";
+                return File(csvBytes, "text/csv", fileName);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to generate attendance CSV report");
+                return StatusCode(500, new { error = "Failed to export attendance report." });
             }
         }
     }

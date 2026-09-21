@@ -27,6 +27,9 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Configurations
                 .IsRequired()
                 .HasColumnName("clock_in_time");
 
+            builder.Property(e => e.ClockOutTime)
+                .HasColumnName("clock_out_time");
+
             builder.Property(e => e.Latitude)
                 .HasColumnName("latitude");
 
@@ -38,6 +41,18 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Configurations
 
             builder.Property(e => e.DistanceMeters)
                 .HasColumnName("distance_meters");
+
+            builder.Property(e => e.ClockOutLatitude)
+                .HasColumnName("clock_out_latitude");
+
+            builder.Property(e => e.ClockOutLongitude)
+                .HasColumnName("clock_out_longitude");
+
+            builder.Property(e => e.ClockOutAccuracyMeters)
+                .HasColumnName("clock_out_accuracy_meters");
+
+            builder.Property(e => e.ClockOutDistanceMeters)
+                .HasColumnName("clock_out_distance_meters");
 
             builder.Property(e => e.Status)
                 .IsRequired()
