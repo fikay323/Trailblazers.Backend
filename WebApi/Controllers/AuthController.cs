@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using System.Text;
+using Trailblazers.Backend.Core.Application.Common.Commands;
 using Trailblazers.Backend.Core.Application.Interfaces;
 using Trailblazers.Backend.Core.Domain.Entities;
 using Trailblazers.Backend.Infrastructure.Persistence;
@@ -262,6 +265,152 @@ namespace Trailblazers.Backend.WebApi.Controllers
                 DisabledReason = user.DisabledReason
             });
         }
+
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword(
+            [FromBody] ForgotPasswordRequestDto request,
+            [FromServices] IMailService mailService,
+            [FromServices] IEmailTemplateService emailTemplateService,
+            [FromServices] IBackgroundTaskQueue taskQueue,
+            [FromServices] IConfiguration configuration,
+            [FromServices] IHttpContextAccessor httpContextAccessor)
+        {
+            if (string.IsNullOrWhiteSpace(request.Email))
+            {
+                return BadRequest(new { error = "Email address is required." });
+            }
+
+            var cleanEmail = request.Email.Trim().ToLowerInvariant();
+            var user = await userManager.FindByEmailAsync(cleanEmail);
+
+            // Return generic success to protect against account enumeration
+            if (user != null && user.IsActive)
+            {
+                var rawToken = await userManager.GeneratePasswordResetTokenAsync(user);
+                var encodedToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(rawToken));
+
+                var frontendUrl = ResolveFrontendUrl(configuration, httpContextAccessor);
+                var resetUrl = $"{frontendUrl}/auth/reset-password?token={encodedToken}&email={Uri.EscapeDataString(cleanEmail)}";
+
+                var emailHtml = emailTemplateService.RenderPasswordResetEmail(
+                    recipientName: user.FullName,
+                    resetUrl: resetUrl);
+
+                await taskQueue.QueueBackgroundWorkItemAsync(new SendEmailCommand(
+                    To: cleanEmail,
+                    Subject: "Reset Your Password - Trailblazers Academy",
+                    Body: emailHtml,
+                    IsHtml: true));
+
+                logger.LogInformation("Password reset token generated and queued for {Email}", cleanEmail);
+            }
+
+            return Ok(new { message = "If an account exists with that email address, a password reset link has been dispatched." });
+        }
+
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequestDto request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Token) || string.IsNullOrWhiteSpace(request.NewPassword))
+            {
+                return BadRequest(new { error = "Email, reset token, and new password are required." });
+            }
+
+            var cleanEmail = request.Email.Trim().ToLowerInvariant();
+            var user = await userManager.FindByEmailAsync(cleanEmail);
+            if (user == null)
+            {
+                return BadRequest(new { error = "Invalid password reset request." });
+            }
+
+            string decodedToken;
+            try
+            {
+                var bytes = WebEncoders.Base64UrlDecode(request.Token);
+                decodedToken = Encoding.UTF8.GetString(bytes);
+            }
+            catch
+            {
+                decodedToken = request.Token;
+            }
+
+            var result = await userManager.ResetPasswordAsync(user, decodedToken, request.NewPassword);
+            if (!result.Succeeded)
+            {
+                var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+                return BadRequest(new { error = errors });
+            }
+
+            if (!user.EmailConfirmed)
+            {
+                user.EmailConfirmed = true;
+                await userManager.UpdateAsync(user);
+            }
+
+            logger.LogInformation("Password successfully reset for user {Email}", cleanEmail);
+
+            return Ok(new { message = "Password has been reset successfully. You may now sign in with your new password." });
+        }
+
+        private static string ResolveFrontendUrl(IConfiguration configuration, IHttpContextAccessor httpContextAccessor)
+        {
+            var envUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
+                      ?? Environment.GetEnvironmentVariable("APP_URL")
+                      ?? configuration["FrontendUrl"];
+
+            if (!string.IsNullOrWhiteSpace(envUrl))
+            {
+                return envUrl.TrimEnd('/');
+            }
+
+            var httpContext = httpContextAccessor.HttpContext;
+            if (httpContext != null)
+            {
+                if (httpContext.Request.Headers.TryGetValue("Origin", out var origin) && !string.IsNullOrWhiteSpace(origin))
+                {
+                    return origin.ToString().TrimEnd('/');
+                }
+
+                if (httpContext.Request.Headers.TryGetValue("Referer", out var referer) && !string.IsNullOrWhiteSpace(referer))
+                {
+                    if (Uri.TryCreate(referer.ToString(), UriKind.Absolute, out var refererUri))
+                    {
+                        return $"{refererUri.Scheme}://{refererUri.Authority}".TrimEnd('/');
+                    }
+                }
+
+                var host = httpContext.Request.Headers["X-Forwarded-Host"].FirstOrDefault()
+                        ?? httpContext.Request.Host.Value;
+
+                var proto = httpContext.Request.Headers["X-Forwarded-Proto"].FirstOrDefault()
+                         ?? httpContext.Request.Scheme;
+
+                if (!string.IsNullOrWhiteSpace(host) && !host.Contains("localhost", StringComparison.OrdinalIgnoreCase))
+                {
+                    return $"{proto}://{host}".TrimEnd('/');
+                }
+            }
+
+            var isDevelopment = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase);
+            if (!isDevelopment)
+            {
+                return "https://learn.trailblazer-academy.com";
+            }
+
+            return "http://localhost:3000";
+        }
+    }
+
+    public class ForgotPasswordRequestDto
+    {
+        public string Email { get; set; } = string.Empty;
+    }
+
+    public class ResetPasswordRequestDto
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Token { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
     }
 
     public class RegisterRequestDto

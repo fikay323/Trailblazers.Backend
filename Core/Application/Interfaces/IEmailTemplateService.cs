@@ -26,5 +26,10 @@ namespace Trailblazers.Backend.Core.Application.Interfaces
             string targetExam,
             string activationUrl,
             string? logoUrl = null);
+
+        string RenderPasswordResetEmail(
+            string recipientName,
+            string resetUrl,
+            string? logoUrl = null);
     }
 }
