@@ -82,9 +82,12 @@ namespace Trailblazers.Backend.Infrastructure.Services
 
         private async Task SendViaBrevoAsync(string apiKey, string to, string subject, string body, bool isHtml)
         {
+            var cleanKey = apiKey.Trim().Trim('"', '\'', ' ', '\t', '\r', '\n');
             var client = httpClientFactory.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(15);
-            client.DefaultRequestHeaders.Add("api-key", apiKey);
+            client.DefaultRequestHeaders.Clear();
+            client.DefaultRequestHeaders.Add("api-key", cleanKey);
+            client.DefaultRequestHeaders.Add("accept", "application/json");
 
             var fromEmail = Environment.GetEnvironmentVariable("SMTP_FROM")
                          ?? Environment.GetEnvironmentVariable("EMAIL_FROM")
