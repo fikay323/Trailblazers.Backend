@@ -364,5 +364,40 @@ namespace Trailblazers.Backend.WebApi.Controllers
                 return StatusCode(500, new { error = $"Database purge failed: {ex.Message}" });
             }
         }
+
+        [HttpPost("test-email")]
+        [ServiceFilter(typeof(ApiKeyAuthFilter))]
+        public async Task<IActionResult> TestEmail(
+            [FromQuery] string to,
+            [FromServices] IMailService mailService)
+        {
+            if (string.IsNullOrWhiteSpace(to))
+            {
+                return BadRequest(new { error = "Recipient email address 'to' query parameter is required." });
+            }
+
+            try
+            {
+                var testSubject = "Trailblazers Academy - Email Delivery Test";
+                var testBody = $@"
+<!DOCTYPE html>
+<html>
+<body style='font-family: sans-serif; background-color: #0f172a; color: #f8fafc; padding: 24px;'>
+    <div style='max-width: 500px; margin: 0 auto; background-color: #1e293b; padding: 24px; border-radius: 12px; border: 1px solid #334155;'>
+        <h2 style='color: #f97316; margin-top: 0;'>Trailblazers Academy</h2>
+        <p>This is a test email confirming that email delivery is working properly on your Render deployment.</p>
+        <p style='color: #94a3b8; font-size: 12px;'>Timestamp: {DateTimeOffset.UtcNow:u}</p>
+    </div>
+</body>
+</html>";
+                await mailService.SendEmailAsync(to.Trim(), testSubject, testBody, isHtml: true);
+                return Ok(new { success = true, message = $"Test email successfully dispatched to {to}." });
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Test email failed for {Email}", to);
+                return StatusCode(500, new { success = false, error = ex.Message });
+            }
+        }
     }
 }

@@ -136,6 +136,7 @@ builder.Services.AddMediatR(cfg =>
 });
 
 // Dependency Injection
+builder.Services.AddHttpClient();
 builder.Services.AddHttpClient<IJambApiService, RapidApiJambService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(500);
