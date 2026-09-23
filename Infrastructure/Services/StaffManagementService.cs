@@ -53,9 +53,9 @@ namespace Trailblazers.Backend.Infrastructure.Services
                 });
             }
 
-            // Include pending (unaccepted) invitations
+            // Include pending (unaccepted) staff invitations
             var pendingInvites = await dbContext.StaffInvitations
-                .Where(x => !x.IsAccepted)
+                .Where(x => !x.IsAccepted && (x.Role == "Admin" || x.Role == "Instructor"))
                 .OrderByDescending(x => x.CreatedAt)
                 .ToListAsync(cancellationToken);
 

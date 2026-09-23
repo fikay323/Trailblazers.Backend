@@ -280,6 +280,96 @@ using (var scope = app.Services.CreateScope())
                 }
             }
         }
+
+        // Startup Data Reconciliation & Account Purges
+        try
+        {
+            // 1. Purge specified user accounts and bot accounts (as instructed by system administrator)
+            string[] accountsToPurge =
+            [
+                "oluwafikayomi.digital@gmail.com",
+                "fagbenrocoa@gmail.com",
+                "rup.e.lox.a31.4@gmail.com",
+                "er.us.eb.an.8.5@gmail.com",
+                "etoc.e.y.om.1.9.8@gmail.com"
+            ];
+
+            foreach (var emailToPurge in accountsToPurge)
+            {
+                var targetUser = userManager.FindByEmailAsync(emailToPurge).GetAwaiter().GetResult();
+                if (targetUser != null)
+                {
+                    // Remove associated refresh tokens first
+                    var userTokens = context.RefreshTokens.Where(rt => rt.UserId == targetUser.Id).ToList();
+                    if (userTokens.Count != 0)
+                    {
+                        context.RefreshTokens.RemoveRange(userTokens);
+                        context.SaveChanges();
+                    }
+
+                    var delRes = userManager.DeleteAsync(targetUser).GetAwaiter().GetResult();
+                    if (delRes.Succeeded)
+                    {
+                        app.Logger.LogInformation("Purged requested account {Email}", emailToPurge);
+                    }
+                    else
+                    {
+                        app.Logger.LogWarning("Failed to purge account {Email}: {Errors}", emailToPurge, string.Join(", ", delRes.Errors.Select(e => e.Description)));
+                    }
+                }
+
+                // Also clean up any associated staff_invitations
+                var relatedInvites = context.StaffInvitations.Where(x => x.Email == emailToPurge).ToList();
+                if (relatedInvites.Count != 0)
+                {
+                    context.StaffInvitations.RemoveRange(relatedInvites);
+                    context.SaveChanges();
+                    app.Logger.LogInformation("Purged staff_invitations for {Email}", emailToPurge);
+                }
+            }
+
+            // 2. Ensure any remaining accepted student accounts strictly have only the Student role
+            var studentInvites = context.StaffInvitations
+                .Where(x => x.IsAccepted && x.Role == "Student")
+                .Select(x => x.Email)
+                .Distinct()
+                .ToList();
+
+            foreach (var sEmail in studentInvites)
+            {
+                var sUser = userManager.FindByEmailAsync(sEmail).GetAwaiter().GetResult();
+                if (sUser != null)
+                {
+                    var uRoles = userManager.GetRolesAsync(sUser).GetAwaiter().GetResult();
+                    if (uRoles.Contains("Instructor"))
+                    {
+                        userManager.RemoveFromRoleAsync(sUser, "Instructor").GetAwaiter().GetResult();
+                        app.Logger.LogInformation("Reconciled {Email}: removed Instructor role", sEmail);
+                    }
+                    if (uRoles.Contains("Admin"))
+                    {
+                        userManager.RemoveFromRoleAsync(sUser, "Admin").GetAwaiter().GetResult();
+                        app.Logger.LogInformation("Reconciled {Email}: removed Admin role", sEmail);
+                    }
+                    if (!uRoles.Contains("Student"))
+                    {
+                        userManager.AddToRoleAsync(sUser, "Student").GetAwaiter().GetResult();
+                        app.Logger.LogInformation("Reconciled {Email}: assigned Student role", sEmail);
+                    }
+                }
+            }
+
+            // 3. Purge bot submissions from submissions table if any exist
+            context.Database.ExecuteSqlRaw(@"
+                DELETE FROM submissions 
+                WHERE email IN ('rup.e.lox.a31.4@gmail.com', 'er.us.eb.an.8.5@gmail.com', 'etoc.e.y.om.1.9.8@gmail.com', 'oluwafikayomi.digital@gmail.com');
+            ");
+            app.Logger.LogInformation("Startup data reconciliation completed successfully.");
+        }
+        catch (Exception recEx)
+        {
+            app.Logger.LogWarning(recEx, "Startup data reconciliation notice (non-fatal)");
+        }
     }
     catch (Exception ex)
     {

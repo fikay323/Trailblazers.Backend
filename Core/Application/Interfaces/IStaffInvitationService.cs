@@ -46,5 +46,15 @@ namespace Trailblazers.Backend.Core.Application.Interfaces
         public string Email { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string Role { get; set; } = string.Empty;
+        public StaffUserDto User { get; set; } = new();
+    }
+
+    public class StaffUserDto
+    {
+        public Guid Id { get; set; }
+        public string Email { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+        public bool IsActive { get; set; } = true;
     }
 }

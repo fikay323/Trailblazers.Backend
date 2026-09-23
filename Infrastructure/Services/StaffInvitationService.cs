@@ -75,7 +75,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
             await dbContext.SaveChangesAsync(cancellationToken);
 
             // Construct invitation link
-            var frontendUrl = ResolveFrontendUrl();
+            var frontendUrl = ResolveFrontendUrl(cleanRole);
             var inviteUrl = $"{frontendUrl}/auth/accept-invite?token={rawToken}&email={Uri.EscapeDataString(cleanEmail)}";
 
             bool emailSent = false;
@@ -185,7 +185,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
             await dbContext.SaveChangesAsync(cancellationToken);
 
             // Construct invitation link
-            var frontendUrl = ResolveFrontendUrl();
+            var frontendUrl = ResolveFrontendUrl("Student");
             var inviteUrl = $"{frontendUrl}/auth/accept-invite?token={rawToken}&email={Uri.EscapeDataString(cleanEmail)}";
 
             bool emailSent = false;
@@ -339,6 +339,35 @@ namespace Trailblazers.Backend.Infrastructure.Services
                 await userManager.UpdateAsync(user);
 
                 var currentRoles = await userManager.GetRolesAsync(user);
+
+                // Role isolation:
+                if (invitation.Role == "Student")
+                {
+                    if (currentRoles.Contains("Instructor"))
+                    {
+                        await userManager.RemoveFromRoleAsync(user, "Instructor");
+                    }
+                    if (currentRoles.Contains("Admin"))
+                    {
+                        await userManager.RemoveFromRoleAsync(user, "Admin");
+                    }
+                }
+                else
+                {
+                    if (currentRoles.Contains("Student"))
+                    {
+                        await userManager.RemoveFromRoleAsync(user, "Student");
+                    }
+                    if (invitation.Role == "Admin" && currentRoles.Contains("Instructor"))
+                    {
+                        await userManager.RemoveFromRoleAsync(user, "Instructor");
+                    }
+                    else if (invitation.Role == "Instructor" && currentRoles.Contains("Admin"))
+                    {
+                        await userManager.RemoveFromRoleAsync(user, "Admin");
+                    }
+                }
+
                 if (!currentRoles.Contains(invitation.Role))
                 {
                     await userManager.AddToRoleAsync(user, invitation.Role);
@@ -360,7 +389,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
             dbContext.RefreshTokens.Add(refreshToken);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            logger.LogInformation("Staff invitation accepted by {Email}. Assigned role: {Role}", cleanEmail, invitation.Role);
+            logger.LogInformation("Invitation accepted by {Email}. Assigned role: {Role}", cleanEmail, invitation.Role);
 
             return (true, null, new StaffAuthResultDto
             {
@@ -369,7 +398,15 @@ namespace Trailblazers.Backend.Infrastructure.Services
                 UserId = user.Id,
                 Email = user.Email ?? cleanEmail,
                 FullName = user.FullName,
-                Role = invitation.Role
+                Role = invitation.Role,
+                User = new StaffUserDto
+                {
+                    Id = user.Id,
+                    Email = user.Email ?? cleanEmail,
+                    FullName = user.FullName,
+                    Role = invitation.Role,
+                    IsActive = user.IsActive
+                }
             });
         }
 
@@ -396,7 +433,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
             invitation.ExpiresAt = DateTimeOffset.UtcNow.AddHours(48);
             invitation.UpdatedAt = DateTimeOffset.UtcNow;
 
-            var frontendUrl = ResolveFrontendUrl();
+            var frontendUrl = ResolveFrontendUrl(invitation.Role);
             var inviteUrl = $"{frontendUrl}/auth/accept-invite?token={rawToken}&email={Uri.EscapeDataString(invitation.Email)}";
 
             bool emailSent = false;
@@ -404,15 +441,30 @@ namespace Trailblazers.Backend.Infrastructure.Services
 
             try
             {
-                var emailHtml = templateService.RenderStaffInvitationEmail(
-                    recipientName: invitation.FullName,
-                    role: invitation.Role,
-                    inviteUrl: inviteUrl,
-                    invitedByName: invitation.InvitedByUserName);
+                string emailHtml;
+                string emailSubject;
+
+                if (invitation.Role == "Student")
+                {
+                    emailHtml = templateService.RenderStudentAccountActivationEmail(
+                        studentName: invitation.FullName,
+                        targetExam: "JAMB / WAEC",
+                        activationUrl: inviteUrl);
+                    emailSubject = "Reminder: Activate Your Trailblazers Academy Student Account";
+                }
+                else
+                {
+                    emailHtml = templateService.RenderStaffInvitationEmail(
+                        recipientName: invitation.FullName,
+                        role: invitation.Role,
+                        inviteUrl: inviteUrl,
+                        invitedByName: invitation.InvitedByUserName);
+                    emailSubject = $"Reminder: Join the Trailblazers Academy Staff as {invitation.Role}";
+                }
 
                 await mailService.SendEmailAsync(
                     to: invitation.Email,
-                    subject: $"Reminder: Join the Trailblazers Academy Staff as {invitation.Role}",
+                    subject: emailSubject,
                     body: emailHtml,
                     isHtml: true);
 
@@ -420,7 +472,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
                 emailStatusMessage = $"Invitation email successfully resent to {invitation.Email}.";
                 invitation.EmailDeliveryStatus = "Sent";
                 invitation.EmailDeliveryError = null;
-                logger.LogInformation("Staff invitation resent to {Email}", invitation.Email);
+                logger.LogInformation("Invitation ({Role}) resent to {Email}", invitation.Role, invitation.Email);
             }
             catch (Exception ex)
             {
@@ -465,8 +517,19 @@ namespace Trailblazers.Backend.Infrastructure.Services
             return true;
         }
 
-        private string ResolveFrontendUrl()
+        private string ResolveFrontendUrl(string targetRole = "Instructor")
         {
+            var isDevelopment = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase);
+
+            if (targetRole == "Student")
+            {
+                if (!isDevelopment)
+                {
+                    return "https://learn.trailblazer-academy.com";
+                }
+                return "http://localhost:3000";
+            }
+
             // 1. Check explicit environment variables or configuration
             var envUrl = Environment.GetEnvironmentVariable("FRONTEND_URL")
                       ?? Environment.GetEnvironmentVariable("APP_URL")
@@ -507,7 +570,6 @@ namespace Trailblazers.Backend.Infrastructure.Services
             }
 
             // 3. Environment-aware fallback: Production defaults to staff portal domain
-            var isDevelopment = string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Development", StringComparison.OrdinalIgnoreCase);
             if (!isDevelopment)
             {
                 return "https://staff.trailblazer-academy.com";

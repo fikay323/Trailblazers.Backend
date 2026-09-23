@@ -75,7 +75,7 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     Id = user.Id,
                     Email = user.Email ?? string.Empty,
                     FullName = user.FullName,
-                    Role = roles.FirstOrDefault() ?? "Student",
+                    Role = ResolveUserRole(roles),
                     IsActive = user.IsActive,
                     DisabledReason = user.DisabledReason
                 }
@@ -122,7 +122,7 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     Id = user.Id,
                     Email = user.Email ?? string.Empty,
                     FullName = user.FullName,
-                    Role = roles.FirstOrDefault() ?? "Student",
+                    Role = ResolveUserRole(roles),
                     IsActive = user.IsActive,
                     DisabledReason = user.DisabledReason
                 }
@@ -168,7 +168,7 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     Id = user.Id,
                     Email = user.Email ?? string.Empty,
                     FullName = user.FullName,
-                    Role = roles.FirstOrDefault() ?? "Student",
+                    Role = ResolveUserRole(roles),
                     IsActive = user.IsActive,
                     DisabledReason = user.DisabledReason
                 }
@@ -260,7 +260,7 @@ namespace Trailblazers.Backend.WebApi.Controllers
                 Id = user.Id,
                 Email = user.Email ?? string.Empty,
                 FullName = user.FullName,
-                Role = roles.FirstOrDefault() ?? "Student",
+                Role = ResolveUserRole(roles),
                 IsActive = user.IsActive,
                 DisabledReason = user.DisabledReason
             });
@@ -398,6 +398,13 @@ namespace Trailblazers.Backend.WebApi.Controllers
             }
 
             return "http://localhost:3000";
+        }
+
+        private static string ResolveUserRole(IList<string> roles)
+        {
+            if (roles.Contains("Admin")) return "Admin";
+            if (roles.Contains("Instructor")) return "Instructor";
+            return "Student";
         }
     }
 
