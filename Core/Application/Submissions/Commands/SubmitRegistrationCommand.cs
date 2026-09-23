@@ -28,7 +28,9 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
         string? SubjectCombination = null,
         string? ClassMode = null,
         string? Referral = null,
-        List<string>? Programmes = null
+        List<string>? Programmes = null,
+        string? Honeypot = null,
+        long? FormLoadTimestamp = null
     );
 
     public class SubmitRegistrationCommandHandler(
@@ -43,6 +45,36 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
         public async Task<Submission> HandleAsync(SubmitRegistrationCommand command,
             CancellationToken cancellationToken = default)
         {
+            // --- Anti-Bot Defense Layer ---
+            // 1. Honeypot check: If the hidden honeypot trap field was filled, silently swallow
+            if (!string.IsNullOrWhiteSpace(command.Honeypot))
+            {
+                logger.LogWarning("Bot registration attempt dropped via honeypot trap: Name='{Name}', Email='{Email}', Honeypot='{Honeypot}'",
+                    command.Name, command.Email, command.Honeypot);
+                return CreateDummySubmission(command);
+            }
+
+            // 2. Submission duration check: Human filling this form takes at least 2.5 seconds
+            if (command.FormLoadTimestamp.HasValue)
+            {
+                var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                var elapsedSec = (nowMs - command.FormLoadTimestamp.Value) / 1000.0;
+                if (elapsedSec < 2.5 || elapsedSec > 86400)
+                {
+                    logger.LogWarning("Bot registration attempt dropped via timing check: Elapsed={ElapsedSec:F1}s, Email='{Email}'",
+                        elapsedSec, command.Email);
+                    return CreateDummySubmission(command);
+                }
+            }
+
+            // 3. Bot Name Heuristic: Random consonant strings (e.g., 'Sqvhtgx')
+            if (IsBotSpamName(command.Name))
+            {
+                logger.LogWarning("Bot registration attempt dropped via name heuristic: Name='{Name}', Email='{Email}'",
+                    command.Name, command.Email);
+                return CreateDummySubmission(command);
+            }
+
             Validate(command);
 
             var metadataJson = JsonSerializer.Serialize(new
@@ -197,6 +229,31 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
             {
                 return false;
             }
+        }
+
+        private static bool IsBotSpamName(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            var trimmed = name.Trim();
+            // Single-word consonant cluster of 5+ letters without vowels (e.g. Sqvhtgx)
+            if (!trimmed.Contains(' ') && System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^[bcdfghjklmnpqrstvwxyzBCDFGHJKLMNPQRSTVWXYZ]{5,}$"))
+            {
+                return true;
+            }
+            return false;
+        }
+
+        private static Submission CreateDummySubmission(SubmitRegistrationCommand command)
+        {
+            return new Submission
+            {
+                Id = Guid.NewGuid(),
+                Type = SubmissionType.Registration,
+                Name = command.Name ?? "Student",
+                Email = command.Email ?? "student@trailblazer-academy.com",
+                Metadata = "{}",
+                CreatedAt = DateTimeOffset.UtcNow
+            };
         }
     }
 }

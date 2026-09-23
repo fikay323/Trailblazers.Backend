@@ -199,6 +199,42 @@ using (var scope = app.Services.CreateScope())
         context.Database.Migrate();
         app.Logger.LogInformation("Database migrations applied successfully.");
 
+        // Idempotent schema safety patch: Ensure clock_out columns and announcements table exist unconditionally
+        try
+        {
+            context.Database.ExecuteSqlRaw(@"
+                -- 1. Ensure attendance_records clock-out columns exist
+                ALTER TABLE IF EXISTS attendance_records ADD COLUMN IF NOT EXISTS clock_out_accuracy_meters double precision;
+                ALTER TABLE IF EXISTS attendance_records ADD COLUMN IF NOT EXISTS clock_out_distance_meters double precision;
+                ALTER TABLE IF EXISTS attendance_records ADD COLUMN IF NOT EXISTS clock_out_latitude double precision;
+                ALTER TABLE IF EXISTS attendance_records ADD COLUMN IF NOT EXISTS clock_out_longitude double precision;
+                ALTER TABLE IF EXISTS attendance_records ADD COLUMN IF NOT EXISTS clock_out_time timestamp with time zone;
+
+                -- 2. Ensure announcements table exists for Noticeboard
+                CREATE TABLE IF NOT EXISTS announcements (
+                    ""Id"" uuid NOT NULL PRIMARY KEY,
+                    ""Title"" character varying(250) NOT NULL,
+                    ""Content"" text NOT NULL,
+                    ""Priority"" character varying(50) NOT NULL,
+                    ""TargetAudience"" character varying(50) NOT NULL DEFAULT 'All',
+                    ""IsActive"" boolean NOT NULL DEFAULT true,
+                    ""CreatedAt"" timestamp with time zone NOT NULL,
+                    ""ExpiresAt"" timestamp with time zone NULL,
+                    ""AuthorName"" character varying(200) NOT NULL,
+                    ""AuthorId"" uuid NULL,
+                    ""SentEmailBroadcast"" boolean NOT NULL DEFAULT false,
+                    ""SentSmsBroadcast"" boolean NOT NULL DEFAULT false
+                );
+                CREATE INDEX IF NOT EXISTS ""IX_announcements_CreatedAt"" ON announcements (""CreatedAt"");
+                CREATE INDEX IF NOT EXISTS ""IX_announcements_IsActive"" ON announcements (""IsActive"");
+            ");
+            app.Logger.LogInformation("Idempotent schema safety patch executed successfully.");
+        }
+        catch (Exception patchEx)
+        {
+            app.Logger.LogWarning(patchEx, "Schema safety patch warning (non-fatal)");
+        }
+
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
 

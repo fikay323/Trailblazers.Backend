@@ -10,7 +10,9 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
     public record SubmitContactCommand(
         string Name,
         string Email,
-        string Message
+        string Message,
+        string? Honeypot = null,
+        long? FormLoadTimestamp = null
     );
 
     public class SubmitContactCommandHandler(
@@ -21,6 +23,27 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
         public async Task<Submission> HandleAsync(SubmitContactCommand command,
             CancellationToken cancellationToken = default)
         {
+            // Honeypot check
+            if (!string.IsNullOrWhiteSpace(command.Honeypot))
+            {
+                logger.LogWarning("Bot contact inquiry dropped via honeypot: Name='{Name}', Email='{Email}'",
+                    command.Name, command.Email);
+                return CreateDummySubmission(command);
+            }
+
+            // Duration check (< 2 seconds)
+            if (command.FormLoadTimestamp.HasValue)
+            {
+                var nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                var elapsedSec = (nowMs - command.FormLoadTimestamp.Value) / 1000.0;
+                if (elapsedSec < 2.0 || elapsedSec > 86400)
+                {
+                    logger.LogWarning("Bot contact inquiry dropped via timing check: Elapsed={ElapsedSec:F1}s, Email='{Email}'",
+                        elapsedSec, command.Email);
+                    return CreateDummySubmission(command);
+                }
+            }
+
             Validate(command);
 
             var metadataJson = JsonSerializer.Serialize(new { Message = command.Message.Trim() });
@@ -74,6 +97,19 @@ namespace Trailblazers.Backend.Core.Application.Submissions.Commands
             {
                 return false;
             }
+        }
+
+        private static Submission CreateDummySubmission(SubmitContactCommand command)
+        {
+            return new Submission
+            {
+                Id = Guid.NewGuid(),
+                Type = SubmissionType.Contact,
+                Name = command.Name ?? "Inquirer",
+                Email = command.Email ?? "inquiry@trailblazer-academy.com",
+                Metadata = "{}",
+                CreatedAt = DateTimeOffset.UtcNow
+            };
         }
     }
 }
