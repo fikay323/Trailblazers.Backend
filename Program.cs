@@ -228,16 +228,26 @@ using (var scope = app.Services.CreateScope())
                 );
                 CREATE INDEX IF NOT EXISTS ""IX_announcements_CreatedAt"" ON announcements (""CreatedAt"");
                 CREATE INDEX IF NOT EXISTS ""IX_announcements_IsActive"" ON announcements (""IsActive"");
-
-                -- 3. Ensure AspNetUsers profile picture columns exist
-                ALTER TABLE IF EXISTS ""AspNetUsers"" ADD COLUMN IF NOT EXISTS profile_picture_url character varying(1000);
-                ALTER TABLE IF EXISTS ""AspNetUsers"" ADD COLUMN IF NOT EXISTS profile_picture_public_id character varying(256);
             ");
             app.Logger.LogInformation("Idempotent schema safety patch executed successfully.");
         }
         catch (Exception patchEx)
         {
             app.Logger.LogWarning(patchEx, "Schema safety patch warning (non-fatal)");
+        }
+
+        // Dedicated fail-safe for AspNetUsers profile picture columns before any UserManager query
+        try
+        {
+            context.Database.ExecuteSqlRaw(@"
+                ALTER TABLE IF EXISTS ""AspNetUsers"" ADD COLUMN IF NOT EXISTS profile_picture_url character varying(1000);
+                ALTER TABLE IF EXISTS ""AspNetUsers"" ADD COLUMN IF NOT EXISTS profile_picture_public_id character varying(256);
+            ");
+            app.Logger.LogInformation("AspNetUsers profile picture safety columns verified.");
+        }
+        catch (Exception userColEx)
+        {
+            app.Logger.LogWarning(userColEx, "AspNetUsers profile picture columns verification notice");
         }
 
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
