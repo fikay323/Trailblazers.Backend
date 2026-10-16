@@ -1,11 +1,13 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Trailblazers.Backend.Core.Application.Interfaces;
 using Trailblazers.Backend.Core.Domain.Entities;
 using Trailblazers.Backend.Core.Domain.Repositories;
 using Trailblazers.Backend.Core.Application.Submissions.Commands;
 using Trailblazers.Backend.Core.Application.Submissions.Queries;
+using Trailblazers.Backend.Infrastructure.Persistence;
 using Trailblazers.Backend.WebApi.Authentication;
 
 namespace Trailblazers.Backend.WebApi.Controllers
@@ -19,6 +21,32 @@ namespace Trailblazers.Backend.WebApi.Controllers
         ISubmissionRepository repository)
         : ControllerBase
     {
+        [HttpGet("diagnostic")]
+        public async Task<IActionResult> GetDiagnostic([FromServices] ApplicationDbContext context)
+        {
+            try
+            {
+                var conn = context.Database.GetDbConnection();
+                var canConnect = await context.Database.CanConnectAsync();
+                return Ok(new
+                {
+                    canConnect,
+                    database = conn.Database,
+                    dataSource = conn.DataSource,
+                    state = conn.State.ToString()
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new
+                {
+                    error = ex.Message,
+                    inner = ex.InnerException?.Message,
+                    inner2 = ex.InnerException?.InnerException?.Message,
+                    type = ex.GetType().FullName
+                });
+            }
+        }
         [HttpPost("contact")]
         public async Task<IActionResult> SubmitContact(
             [FromBody] SubmitContactCommand command,
@@ -35,7 +63,13 @@ namespace Trailblazers.Backend.WebApi.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = "An internal server error occurred.", details = ex.Message });
+                return StatusCode(500, new
+                {
+                    error = "An internal server error occurred.",
+                    details = ex.Message,
+                    inner = ex.InnerException?.Message,
+                    inner2 = ex.InnerException?.InnerException?.Message
+                });
             }
         }
 
@@ -55,7 +89,13 @@ namespace Trailblazers.Backend.WebApi.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = "An internal server error occurred.", details = ex.Message });
+                return StatusCode(500, new
+                {
+                    error = "An internal server error occurred.",
+                    details = ex.Message,
+                    inner = ex.InnerException?.Message,
+                    inner2 = ex.InnerException?.InnerException?.Message
+                });
             }
         }
 
@@ -86,7 +126,13 @@ namespace Trailblazers.Backend.WebApi.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = "An internal error occurred.", details = ex.Message });
+                return StatusCode(500, new
+                {
+                    error = "An internal error occurred.",
+                    details = ex.Message,
+                    inner = ex.InnerException?.Message,
+                    inner2 = ex.InnerException?.InnerException?.Message
+                });
             }
         }
 
