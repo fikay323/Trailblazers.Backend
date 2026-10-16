@@ -22,9 +22,17 @@ namespace Trailblazers.Backend.Infrastructure.Persistence.Configurations
                 .HasMaxLength(1000)
                 .HasColumnName("disabled_reason");
 
-            builder.Property(u => u.CreatedAt)
-                .IsRequired()
-                .HasColumnName("created_at");
-        }
-    }
+			builder.Property(u => u.ProfilePictureUrl)
+				.HasMaxLength(1000)
+				.HasColumnName("profile_picture_url");
+
+			builder.Property(u => u.ProfilePicturePublicId)
+				.HasMaxLength(256)
+				.HasColumnName("profile_picture_public_id");
+
+			builder.Property(u => u.CreatedAt)
+				.IsRequired()
+				.HasColumnName("created_at");
+		}
+	}
 }

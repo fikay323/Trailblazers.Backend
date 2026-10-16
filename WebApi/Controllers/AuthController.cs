@@ -77,7 +77,8 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     FullName = user.FullName,
                     Role = ResolveUserRole(roles),
                     IsActive = user.IsActive,
-                    DisabledReason = user.DisabledReason
+                    DisabledReason = user.DisabledReason,
+                    ProfilePictureUrl = user.ProfilePictureUrl
                 }
             });
         }
@@ -124,7 +125,8 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     FullName = user.FullName,
                     Role = ResolveUserRole(roles),
                     IsActive = user.IsActive,
-                    DisabledReason = user.DisabledReason
+                    DisabledReason = user.DisabledReason,
+                    ProfilePictureUrl = user.ProfilePictureUrl
                 }
             });
         }
@@ -170,7 +172,8 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     FullName = user.FullName,
                     Role = ResolveUserRole(roles),
                     IsActive = user.IsActive,
-                    DisabledReason = user.DisabledReason
+                    DisabledReason = user.DisabledReason,
+                    ProfilePictureUrl = user.ProfilePictureUrl
                 }
             });
         }
@@ -262,7 +265,8 @@ namespace Trailblazers.Backend.WebApi.Controllers
                 FullName = user.FullName,
                 Role = ResolveUserRole(roles),
                 IsActive = user.IsActive,
-                DisabledReason = user.DisabledReason
+                DisabledReason = user.DisabledReason,
+                ProfilePictureUrl = user.ProfilePictureUrl
             });
         }
 
@@ -454,5 +458,6 @@ namespace Trailblazers.Backend.WebApi.Controllers
         public string Role { get; set; } = string.Empty;
         public bool IsActive { get; set; }
         public string? DisabledReason { get; set; }
+        public string? ProfilePictureUrl { get; set; }
     }
 }

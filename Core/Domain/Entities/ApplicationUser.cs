@@ -6,8 +6,10 @@ namespace Trailblazers.Backend.Core.Domain.Entities
     {
         public string FullName { get; set; } = string.Empty;
         public bool IsActive { get; set; } = true;
-        public string? DisabledReason { get; set; }
-        public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-        public List<RefreshToken> RefreshTokens { get; set; } = [];
-    }
+		public string? DisabledReason { get; set; }
+		public string? ProfilePictureUrl { get; set; }
+		public string? ProfilePicturePublicId { get; set; }
+		public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+		public List<RefreshToken> RefreshTokens { get; set; } = [];
+	}
 }

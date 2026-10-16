@@ -160,6 +160,7 @@ builder.Services.AddScoped<IStaffManagementService, StaffManagementService>();
 builder.Services.AddScoped<IGuardianReportService, GuardianReportService>();
 builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<IGuardianPortalService, GuardianPortalService>();
+builder.Services.AddScoped<IImageStorageService, CloudinaryService>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>(
@@ -227,6 +228,10 @@ using (var scope = app.Services.CreateScope())
                 );
                 CREATE INDEX IF NOT EXISTS ""IX_announcements_CreatedAt"" ON announcements (""CreatedAt"");
                 CREATE INDEX IF NOT EXISTS ""IX_announcements_IsActive"" ON announcements (""IsActive"");
+
+                -- 3. Ensure AspNetUsers profile picture columns exist
+                ALTER TABLE IF EXISTS ""AspNetUsers"" ADD COLUMN IF NOT EXISTS profile_picture_url character varying(1000);
+                ALTER TABLE IF EXISTS ""AspNetUsers"" ADD COLUMN IF NOT EXISTS profile_picture_public_id character varying(256);
             ");
             app.Logger.LogInformation("Idempotent schema safety patch executed successfully.");
         }
