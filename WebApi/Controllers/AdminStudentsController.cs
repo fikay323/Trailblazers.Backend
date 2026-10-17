@@ -254,15 +254,17 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     catch { }
                 }
 
-                // Determine genuine activation status
-                bool isActivated;
-                if (invite != null)
+                // An account is ONLY "Pending Activation" if there is an active, unaccepted, unexpired student invitation,
+                // and the student has not completed any exams yet.
+                // All other students (including all previous students and active test takers) are Active.
+                bool isPendingActivation = invite != null && !invite.IsAccepted && invite.ExpiresAt > DateTimeOffset.UtcNow && testsCount == 0;
+                bool isActivated = !isPendingActivation;
+
+                // Auto-heal existing active students whose EmailConfirmed flag was left false in Identity
+                if (isActivated && !s.EmailConfirmed)
                 {
-                    isActivated = invite.IsAccepted;
-                }
-                else
-                {
-                    isActivated = s.EmailConfirmed;
+                    s.EmailConfirmed = true;
+                    _ = userManager.UpdateAsync(s);
                 }
 
                 string status;
@@ -270,7 +272,7 @@ namespace Trailblazers.Backend.WebApi.Controllers
                 {
                     status = "Suspended";
                 }
-                else if (!isActivated)
+                else if (isPendingActivation)
                 {
                     status = "Pending Activation";
                 }
@@ -288,7 +290,7 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     IsActive = s.IsActive,
                     Status = status,
                     IsActivated = isActivated,
-                    IsPendingActivation = !isActivated,
+                    IsPendingActivation = isPendingActivation,
                     InviteUrl = inviteUrl,
                     DisabledReason = s.DisabledReason,
                     ProfilePictureUrl = s.ProfilePictureUrl,
@@ -381,8 +383,9 @@ namespace Trailblazers.Backend.WebApi.Controllers
         [HttpDelete("{id:guid}/profile-picture")]
         public async Task<IActionResult> DeleteStudentProfilePicture(
             Guid id,
-            [FromBody] DeleteProfilePictureByAdminRequestDto request,
-            CancellationToken cancellationToken)
+            [FromBody] DeleteProfilePictureByAdminRequestDto? request = null,
+            [FromQuery] string? reason = null,
+            CancellationToken cancellationToken = default)
         {
             var student = await userManager.FindByIdAsync(id.ToString());
             if (student == null)
@@ -390,9 +393,11 @@ namespace Trailblazers.Backend.WebApi.Controllers
                 return NotFound(new { error = "Student not found." });
             }
 
-            var reason = string.IsNullOrWhiteSpace(request?.Reason)
-                ? "Profile picture did not comply with academy standards."
-                : request.Reason.Trim();
+            var effectiveReason = !string.IsNullOrWhiteSpace(request?.Reason)
+                ? request.Reason.Trim()
+                : (!string.IsNullOrWhiteSpace(reason)
+                    ? reason.Trim()
+                    : "Profile picture did not comply with academy standards.");
 
             // Clean up Cloudinary asset if present
             if (!string.IsNullOrWhiteSpace(student.ProfilePicturePublicId))
@@ -416,21 +421,35 @@ namespace Trailblazers.Backend.WebApi.Controllers
                             ?? User.FindFirstValue(ClaimTypes.Name)
                             ?? "Academy Administration";
 
-            // Create in-app student notification
+            // 1. Create in-app student notification for this specific student
             var notification = new StudentNotification
             {
                 Id = Guid.NewGuid(),
                 StudentId = student.Id,
                 StudentEmail = student.Email ?? string.Empty,
                 Title = "Profile Picture Removed",
-                Message = $"Your profile picture was removed by {actorName}. Reason: {reason}",
+                Message = $"Your profile picture was removed by {actorName}. Reason: {effectiveReason}",
                 Type = "ProfilePictureRemoved",
                 IsRead = false,
                 CreatedAt = DateTimeOffset.UtcNow,
                 CreatedBy = actorName
             };
-
             dbContext.StudentNotifications.Add(notification);
+
+            // 2. Create high-priority Announcement for Noticeboard
+            var noticeboardAnnouncement = new Announcement
+            {
+                Id = Guid.NewGuid(),
+                Title = "Profile Picture Notice - Removal Action",
+                Content = $"Official Notice for {student.FullName}: Your uploaded profile photograph was removed by {actorName}. Reason: {effectiveReason}. Please upload an appropriate passport photograph compliant with academy guidelines.",
+                Priority = AnnouncementPriority.Urgent,
+                TargetAudience = "All",
+                IsActive = true,
+                CreatedAt = DateTimeOffset.UtcNow,
+                AuthorName = actorName
+            };
+            dbContext.Announcements.Add(noticeboardAnnouncement);
+
             await dbContext.SaveChangesAsync(cancellationToken);
 
             // Dispatch notification email to student
@@ -441,7 +460,7 @@ namespace Trailblazers.Backend.WebApi.Controllers
 
                 var emailHtml = emailTemplateService.RenderProfilePictureRemovedEmail(
                     student.FullName,
-                    reason,
+                    effectiveReason,
                     portalUrl);
 
                 await mailService.SendEmailAsync(
