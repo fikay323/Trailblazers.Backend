@@ -255,34 +255,42 @@ namespace Trailblazers.Backend.WebApi.Controllers
             [FromQuery] string? email,
             CancellationToken cancellationToken)
         {
-            var userEmail = User.FindFirstValue(ClaimTypes.Email)
-                            ?? User.FindFirstValue("email")
-                            ?? email;
-
-            if (string.IsNullOrWhiteSpace(userEmail))
+            try
             {
-                return BadRequest(new { error = "Student email is required." });
-            }
+                var userEmail = User.FindFirstValue(ClaimTypes.Email)
+                                ?? User.FindFirstValue("email")
+                                ?? email;
 
-            var normalizedEmail = userEmail.Trim().ToLowerInvariant();
-
-            var notifications = await dbContext.StudentNotifications
-                .Where(n => n.StudentEmail.ToLower() == normalizedEmail)
-                .OrderByDescending(n => n.CreatedAt)
-                .Take(50)
-                .Select(n => new
+                if (string.IsNullOrWhiteSpace(userEmail))
                 {
-                    n.Id,
-                    n.Title,
-                    n.Message,
-                    n.Type,
-                    n.IsRead,
-                    n.CreatedAt,
-                    n.CreatedBy
-                })
-                .ToListAsync(cancellationToken);
+                    return BadRequest(new { error = "Student email is required." });
+                }
 
-            return Ok(notifications);
+                var normalizedEmail = userEmail.Trim().ToLowerInvariant();
+
+                var notifications = await dbContext.StudentNotifications
+                    .Where(n => n.StudentEmail.ToLower() == normalizedEmail)
+                    .OrderByDescending(n => n.CreatedAt)
+                    .Take(50)
+                    .Select(n => new
+                    {
+                        n.Id,
+                        n.Title,
+                        n.Message,
+                        n.Type,
+                        n.IsRead,
+                        n.CreatedAt,
+                        n.CreatedBy
+                    })
+                    .ToListAsync(cancellationToken);
+
+                return Ok(notifications);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to retrieve student notifications for {Email}", email);
+                return StatusCode(500, new { error = ex.Message, details = ex.ToString() });
+            }
         }
 
         [HttpPost("me/notifications/{id:guid}/read")]

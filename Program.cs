@@ -199,8 +199,15 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = services.GetRequiredService<ApplicationDbContext>();
-        context.Database.Migrate();
-        app.Logger.LogInformation("Database migrations applied successfully.");
+        try
+        {
+            context.Database.Migrate();
+            app.Logger.LogInformation("Database migrations applied successfully.");
+        }
+        catch (Exception migEx)
+        {
+            app.Logger.LogWarning(migEx, "Database.Migrate() warning (continuing to safety patch)");
+        }
 
         // Idempotent schema safety patch: Ensure clock_out columns and announcements table exist unconditionally
         try
@@ -228,6 +235,18 @@ using (var scope = app.Services.CreateScope())
                     ""SentEmailBroadcast"" boolean NOT NULL DEFAULT false,
                     ""SentSmsBroadcast"" boolean NOT NULL DEFAULT false
                 );
+                ALTER TABLE IF EXISTS announcements ADD COLUMN IF NOT EXISTS ""Id"" uuid;
+                ALTER TABLE IF EXISTS announcements ADD COLUMN IF NOT EXISTS ""Title"" character varying(250);
+                ALTER TABLE IF EXISTS announcements ADD COLUMN IF NOT EXISTS ""Content"" text;
+                ALTER TABLE IF EXISTS announcements ADD COLUMN IF NOT EXISTS ""Priority"" character varying(50);
+                ALTER TABLE IF EXISTS announcements ADD COLUMN IF NOT EXISTS ""TargetAudience"" character varying(50) DEFAULT 'All';
+                ALTER TABLE IF EXISTS announcements ADD COLUMN IF NOT EXISTS ""IsActive"" boolean DEFAULT true;
+                ALTER TABLE IF EXISTS announcements ADD COLUMN IF NOT EXISTS ""CreatedAt"" timestamp with time zone;
+                ALTER TABLE IF EXISTS announcements ADD COLUMN IF NOT EXISTS ""ExpiresAt"" timestamp with time zone;
+                ALTER TABLE IF EXISTS announcements ADD COLUMN IF NOT EXISTS ""AuthorName"" character varying(200);
+                ALTER TABLE IF EXISTS announcements ADD COLUMN IF NOT EXISTS ""AuthorId"" uuid;
+                ALTER TABLE IF EXISTS announcements ADD COLUMN IF NOT EXISTS ""SentEmailBroadcast"" boolean DEFAULT false;
+                ALTER TABLE IF EXISTS announcements ADD COLUMN IF NOT EXISTS ""SentSmsBroadcast"" boolean DEFAULT false;
                 CREATE INDEX IF NOT EXISTS ""IX_announcements_CreatedAt"" ON announcements (""CreatedAt"");
                 CREATE INDEX IF NOT EXISTS ""IX_announcements_IsActive"" ON announcements (""IsActive"");
 
@@ -243,6 +262,15 @@ using (var scope = app.Services.CreateScope())
                     ""CreatedAt"" timestamp with time zone NOT NULL,
                     ""CreatedBy"" character varying(200) NULL
                 );
+                ALTER TABLE IF EXISTS student_notifications ADD COLUMN IF NOT EXISTS ""Id"" uuid;
+                ALTER TABLE IF EXISTS student_notifications ADD COLUMN IF NOT EXISTS ""StudentId"" uuid;
+                ALTER TABLE IF EXISTS student_notifications ADD COLUMN IF NOT EXISTS ""StudentEmail"" character varying(256);
+                ALTER TABLE IF EXISTS student_notifications ADD COLUMN IF NOT EXISTS ""Title"" character varying(200);
+                ALTER TABLE IF EXISTS student_notifications ADD COLUMN IF NOT EXISTS ""Message"" character varying(2000);
+                ALTER TABLE IF EXISTS student_notifications ADD COLUMN IF NOT EXISTS ""Type"" character varying(50) DEFAULT 'General';
+                ALTER TABLE IF EXISTS student_notifications ADD COLUMN IF NOT EXISTS ""IsRead"" boolean DEFAULT false;
+                ALTER TABLE IF EXISTS student_notifications ADD COLUMN IF NOT EXISTS ""CreatedAt"" timestamp with time zone;
+                ALTER TABLE IF EXISTS student_notifications ADD COLUMN IF NOT EXISTS ""CreatedBy"" character varying(200);
                 CREATE INDEX IF NOT EXISTS ""IX_student_notifications_StudentId"" ON student_notifications (""StudentId"");
                 CREATE INDEX IF NOT EXISTS ""IX_student_notifications_StudentEmail"" ON student_notifications (""StudentEmail"");
                 CREATE INDEX IF NOT EXISTS ""IX_student_notifications_CreatedAt"" ON student_notifications (""CreatedAt"");
