@@ -898,6 +898,86 @@ namespace Trailblazers.Backend.Infrastructure.Services
 </body>
 </html>";
         }
+
+        public string RenderProfilePictureRemovedEmail(
+            string studentName,
+            string reason,
+            string portalUrl,
+            string? logoUrl = null)
+        {
+            var cleanName = WebUtility.HtmlEncode(studentName);
+            var cleanReason = WebUtility.HtmlEncode(reason);
+            var cleanUrl = WebUtility.HtmlEncode(portalUrl);
+            var resolvedLogoUrl = !string.IsNullOrWhiteSpace(logoUrl)
+                ? WebUtility.HtmlEncode(logoUrl)
+                : "https://trailblazer-academy.com/trailblazer.jpeg";
+
+            return $@"
+<!DOCTYPE html>
+<html lang=""en"">
+<head>
+    <meta charset=""UTF-8"">
+    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
+    <title>Profile Picture Notice</title>
+</head>
+<body style=""margin: 0; padding: 0; background-color: #020617; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;"">
+    <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""background-color: #020617; padding: 32px 16px;"">
+        <tr>
+            <td align=""center"">
+                <table role=""presentation"" width=""100%"" cellpadding=""0"" cellspacing=""0"" style=""max-width: 580px; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; overflow: hidden;"">
+                    <tr>
+                        <td style=""background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%); padding: 28px 32px; text-align: center;"">
+                            <img src=""{resolvedLogoUrl}"" alt=""Trailblazers Academy"" width=""56"" height=""56"" style=""border-radius: 50%; border: 2px solid rgba(255,255,255,0.4); margin-bottom: 12px; display: inline-block;"">
+                            <h1 style=""margin: 0; font-size: 20px; font-weight: 800; color: #ffffff;"">Profile Picture Notice</h1>
+                            <p style=""margin: 4px 0 0; font-size: 13px; color: #ffedd5;"">Academy Administration & Compliance</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style=""padding: 32px;"">
+                            <p style=""margin: 0 0 16px; font-size: 15px; line-height: 24px; color: #f8fafc;"">
+                                Hello <strong>{cleanName}</strong>,
+                            </p>
+                            <p style=""margin: 0 0 20px; font-size: 14px; line-height: 22px; color: #cbd5e1;"">
+                                Please be informed that your student profile picture was recently removed by academy administration.
+                            </p>
+                            <div style=""background-color: #1e1b4b; border-left: 4px solid #f97316; border-radius: 8px; padding: 16px; margin: 0 0 24px;"">
+                                <p style=""margin: 0 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #fb923c; font-weight: 700;"">Reason Provided:</p>
+                                <p style=""margin: 0; font-size: 14px; line-height: 22px; color: #e2e8f0; font-weight: 500;"">{cleanReason}</p>
+                            </div>
+                            <p style=""margin: 0 0 24px; font-size: 13px; line-height: 20px; color: #94a3b8;"">
+                                Please sign in to your student dashboard to upload a new, clear passport-style portrait photograph that meets academy standards.
+                            </p>
+                            <div style=""text-align: center; margin: 28px 0;"">
+                                <a href=""{cleanUrl}"" style=""display: inline-block; background-color: #ea580c; color: #ffffff; font-size: 14px; font-weight: 600; text-decoration: none; padding: 12px 28px; border-radius: 8px;"">
+                                    Go to Student Portal
+                                </a>
+                            </div>
+                            <p style=""margin: 0; font-size: 13px; line-height: 20px; color: #94a3b8;"">
+                                Best regards,<br>
+                                <strong style=""color: #ffffff;"">Trailblazers Academy Administration</strong>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td align=""center"" style=""padding: 20px 28px; background-color: #020617; border-top: 1px solid #1e293b;"">
+                            <p style=""margin: 0 0 4px; font-size: 11px; color: #94a3b8; font-weight: 600;"">
+                                Trailblazers Academy & Edukonsult
+                            </p>
+                            <p style=""margin: 0 0 4px; font-size: 10px; color: #475569;"">
+                                Opp. Ajorosun Garden City, Ijaye-Iseyin Road, Odo Oba Moniya, Ibadan
+                            </p>
+                            <p style=""margin: 0; font-size: 10px; color: #f97316;"">
+                                +234 816 599 9425 &bull; info@trailblazer-academy.com
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>";
+        }
     }
 }
 

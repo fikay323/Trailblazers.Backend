@@ -1,8 +1,10 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Trailblazers.Backend.Core.Application.Interfaces;
 using Trailblazers.Backend.Core.Domain.Entities;
+using Trailblazers.Backend.Infrastructure.Persistence;
 using Trailblazers.Backend.WebApi.Authentication;
 
 namespace Trailblazers.Backend.WebApi.Controllers
@@ -13,6 +15,11 @@ namespace Trailblazers.Backend.WebApi.Controllers
     public class AdminStudentsController(
         UserManager<ApplicationUser> userManager,
         IExamSessionRepository sessionRepository,
+        IImageStorageService imageStorageService,
+        ApplicationDbContext dbContext,
+        IMailService mailService,
+        IEmailTemplateService emailTemplateService,
+        IConfiguration configuration,
         ILogger<AdminStudentsController> logger) : ControllerBase
     {
         [HttpGet]
@@ -45,6 +52,7 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     PhoneNumber = s.PhoneNumber,
                     IsActive = s.IsActive,
                     DisabledReason = s.DisabledReason,
+                    ProfilePictureUrl = s.ProfilePictureUrl,
                     TotalTestsTaken = testsCount,
                     AverageScore = avgScore,
                     CreatedAt = s.CreatedAt
@@ -130,6 +138,94 @@ namespace Trailblazers.Backend.WebApi.Controllers
                 Attempts = attempts
             });
         }
+
+        [HttpDelete("{id:guid}/profile-picture")]
+        public async Task<IActionResult> DeleteStudentProfilePicture(
+            Guid id,
+            [FromBody] DeleteProfilePictureByAdminRequestDto request,
+            CancellationToken cancellationToken)
+        {
+            var student = await userManager.FindByIdAsync(id.ToString());
+            if (student == null)
+            {
+                return NotFound(new { error = "Student not found." });
+            }
+
+            var reason = string.IsNullOrWhiteSpace(request?.Reason)
+                ? "Profile picture did not comply with academy standards."
+                : request.Reason.Trim();
+
+            // Clean up Cloudinary asset if present
+            if (!string.IsNullOrWhiteSpace(student.ProfilePicturePublicId))
+            {
+                logger.LogInformation("Admin deleting Cloudinary asset {PublicId} for student {StudentId}",
+                    student.ProfilePicturePublicId, student.Id);
+                await imageStorageService.DeleteImageAsync(student.ProfilePicturePublicId, cancellationToken);
+            }
+
+            student.ProfilePictureUrl = null;
+            student.ProfilePicturePublicId = null;
+
+            var updateResult = await userManager.UpdateAsync(student);
+            if (!updateResult.Succeeded)
+            {
+                var errors = string.Join("; ", updateResult.Errors.Select(e => e.Description));
+                return StatusCode(StatusCodes.Status500InternalServerError, new { error = errors });
+            }
+
+            var actorName = User.FindFirstValue("fullName")
+                            ?? User.FindFirstValue(ClaimTypes.Name)
+                            ?? "Academy Administration";
+
+            // Create in-app student notification
+            var notification = new StudentNotification
+            {
+                Id = Guid.NewGuid(),
+                StudentId = student.Id,
+                StudentEmail = student.Email ?? string.Empty,
+                Title = "Profile Picture Removed",
+                Message = $"Your profile picture was removed by {actorName}. Reason: {reason}",
+                Type = "ProfilePictureRemoved",
+                IsRead = false,
+                CreatedAt = DateTimeOffset.UtcNow,
+                CreatedBy = actorName
+            };
+
+            dbContext.StudentNotifications.Add(notification);
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            // Dispatch notification email to student
+            try
+            {
+                var portalUrl = configuration["Frontend:StudentPortalUrl"]
+                                ?? "https://learn.trailblazer.com/student/dashboard";
+
+                var emailHtml = emailTemplateService.RenderProfilePictureRemovedEmail(
+                    student.FullName,
+                    reason,
+                    portalUrl);
+
+                await mailService.SendEmailAsync(
+                    student.Email!,
+                    "Profile Picture Removal Notice - Trailblazers Academy",
+                    emailHtml,
+                    isHtml: true);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to send profile picture removal email to {Email}", student.Email);
+            }
+
+            logger.LogInformation("Admin/Staff successfully removed profile picture for student {Email} with reason: {Reason}",
+                student.Email, reason);
+
+            return Ok(new
+            {
+                message = "Student profile picture removed successfully and notification dispatched.",
+                studentId = student.Id,
+                reason
+            });
+        }
     }
 
     public class AdminStudentListItemDto
@@ -140,6 +236,7 @@ namespace Trailblazers.Backend.WebApi.Controllers
         public string? PhoneNumber { get; set; }
         public bool IsActive { get; set; }
         public string? DisabledReason { get; set; }
+        public string? ProfilePictureUrl { get; set; }
         public int TotalTestsTaken { get; set; }
         public double AverageScore { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
@@ -148,6 +245,11 @@ namespace Trailblazers.Backend.WebApi.Controllers
     public class UpdateStudentStatusRequestDto
     {
         public bool IsActive { get; set; }
+        public string? Reason { get; set; }
+    }
+
+    public class DeleteProfilePictureByAdminRequestDto
+    {
         public string? Reason { get; set; }
     }
 }

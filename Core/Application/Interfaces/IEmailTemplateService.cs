@@ -72,6 +72,12 @@ namespace Trailblazers.Backend.Core.Application.Interfaces
             string subject,
             string message,
             string? logoUrl = null);
+
+        string RenderProfilePictureRemovedEmail(
+            string studentName,
+            string reason,
+            string portalUrl,
+            string? logoUrl = null);
     }
 }
 

@@ -2,8 +2,10 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Trailblazers.Backend.Core.Application.Interfaces;
 using Trailblazers.Backend.Core.Domain.Entities;
+using Trailblazers.Backend.Infrastructure.Persistence;
 
 namespace Trailblazers.Backend.WebApi.Controllers
 {
@@ -13,6 +15,7 @@ namespace Trailblazers.Backend.WebApi.Controllers
         IExamSessionRepository sessionRepository,
         UserManager<ApplicationUser> userManager,
         IImageStorageService imageStorageService,
+        ApplicationDbContext dbContext,
         ILogger<StudentsController> logger) : ControllerBase
     {
         [HttpGet("me/exam-history")]
@@ -245,6 +248,58 @@ namespace Trailblazers.Backend.WebApi.Controllers
             }
 
             return Ok(new { message = "Profile picture deleted successfully." });
+        }
+
+        [HttpGet("me/notifications")]
+        public async Task<IActionResult> GetMyNotifications(
+            [FromQuery] string? email,
+            CancellationToken cancellationToken)
+        {
+            var userEmail = User.FindFirstValue(ClaimTypes.Email)
+                            ?? User.FindFirstValue("email")
+                            ?? email;
+
+            if (string.IsNullOrWhiteSpace(userEmail))
+            {
+                return BadRequest(new { error = "Student email is required." });
+            }
+
+            var normalizedEmail = userEmail.Trim().ToLowerInvariant();
+
+            var notifications = await dbContext.StudentNotifications
+                .Where(n => n.StudentEmail.ToLower() == normalizedEmail)
+                .OrderByDescending(n => n.CreatedAt)
+                .Take(50)
+                .Select(n => new
+                {
+                    n.Id,
+                    n.Title,
+                    n.Message,
+                    n.Type,
+                    n.IsRead,
+                    n.CreatedAt,
+                    n.CreatedBy
+                })
+                .ToListAsync(cancellationToken);
+
+            return Ok(notifications);
+        }
+
+        [HttpPost("me/notifications/{id:guid}/read")]
+        public async Task<IActionResult> MarkNotificationAsRead(
+            Guid id,
+            CancellationToken cancellationToken)
+        {
+            var notification = await dbContext.StudentNotifications.FindAsync([id], cancellationToken);
+            if (notification == null)
+            {
+                return NotFound(new { error = "Notification not found." });
+            }
+
+            notification.IsRead = true;
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            return Ok(new { message = "Notification marked as read." });
         }
     }
 

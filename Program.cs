@@ -228,6 +228,23 @@ using (var scope = app.Services.CreateScope())
                 );
                 CREATE INDEX IF NOT EXISTS ""IX_announcements_CreatedAt"" ON announcements (""CreatedAt"");
                 CREATE INDEX IF NOT EXISTS ""IX_announcements_IsActive"" ON announcements (""IsActive"");
+
+                -- 3. Ensure student_notifications table exists
+                CREATE TABLE IF NOT EXISTS student_notifications (
+                    ""Id"" uuid NOT NULL PRIMARY KEY,
+                    ""StudentId"" uuid NOT NULL,
+                    ""StudentEmail"" character varying(256) NOT NULL,
+                    ""Title"" character varying(200) NOT NULL,
+                    ""Message"" character varying(2000) NOT NULL,
+                    ""Type"" character varying(50) NOT NULL DEFAULT 'General',
+                    ""IsRead"" boolean NOT NULL DEFAULT false,
+                    ""CreatedAt"" timestamp with time zone NOT NULL,
+                    ""CreatedBy"" character varying(200) NULL
+                );
+                CREATE INDEX IF NOT EXISTS ""IX_student_notifications_StudentId"" ON student_notifications (""StudentId"");
+                CREATE INDEX IF NOT EXISTS ""IX_student_notifications_StudentEmail"" ON student_notifications (""StudentEmail"");
+                CREATE INDEX IF NOT EXISTS ""IX_student_notifications_CreatedAt"" ON student_notifications (""CreatedAt"");
+                CREATE INDEX IF NOT EXISTS ""IX_student_notifications_IsRead"" ON student_notifications (""IsRead"");
             ");
             app.Logger.LogInformation("Idempotent schema safety patch executed successfully.");
         }
