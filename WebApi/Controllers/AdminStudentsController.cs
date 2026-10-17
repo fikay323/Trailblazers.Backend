@@ -25,29 +25,72 @@ namespace Trailblazers.Backend.WebApi.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAllStudents(CancellationToken cancellationToken)
         {
-            var students = (await userManager.GetUsersInRoleAsync("Student")).ToList();
+            // 1. Gather all users and staff in the system
+            var allUsers = await userManager.Users.ToListAsync(cancellationToken);
+            var adminUsers = await userManager.GetUsersInRoleAsync("Admin");
+            var instructorUsers = await userManager.GetUsersInRoleAsync("Instructor");
+            var staffUserIds = adminUsers.Select(u => u.Id).Concat(instructorUsers.Select(u => u.Id)).ToHashSet();
+            var staffEmails = new HashSet<string>(
+                adminUsers.Concat(instructorUsers).Select(u => (u.Email ?? string.Empty).Trim().ToLowerInvariant()),
+                StringComparer.OrdinalIgnoreCase);
 
-            // Self-heal & sync any student accounts enrolled via staff invitations (e.g. Oladejo Sunday)
+            // 2. Identify students currently in "Student" role
+            var students = (await userManager.GetUsersInRoleAsync("Student")).ToList();
+            var studentUserIds = students.Select(s => s.Id).ToHashSet();
+            var studentEmails = new HashSet<string>(
+                students.Select(s => (s.Email ?? string.Empty).Trim().ToLowerInvariant()),
+                StringComparer.OrdinalIgnoreCase);
+
+            // Auto-heal any existing ApplicationUsers who are neither Admin nor Instructor: they are students!
+            foreach (var user in allUsers)
+            {
+                if (!staffUserIds.Contains(user.Id) && !studentUserIds.Contains(user.Id))
+                {
+                    var cleanEmail = (user.Email ?? string.Empty).Trim().ToLowerInvariant();
+                    await userManager.AddToRoleAsync(user, "Student");
+                    students.Add(user);
+                    studentUserIds.Add(user.Id);
+                    if (!string.IsNullOrWhiteSpace(cleanEmail))
+                    {
+                        studentEmails.Add(cleanEmail);
+                    }
+                    logger.LogInformation("Assigned missing 'Student' role to existing user {Email} ({Name})", user.Email, user.FullName);
+                }
+            }
+
+            // 3. Inspect StaffInvitations (case-insensitive for 'Student')
             var studentInvites = await dbContext.StaffInvitations
-                .Where(x => x.Role == "Student")
+                .Where(x => x.Role.ToLower() == "student")
                 .ToListAsync(cancellationToken);
 
-            if (studentInvites.Count > 0)
+            var invitesByEmail = studentInvites
+                .Where(x => !string.IsNullOrWhiteSpace(x.Email))
+                .GroupBy(x => x.Email.Trim().ToLowerInvariant())
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.CreatedAt).First());
+
+            // 4. Inspect Submissions (find all registrations and anyone enrolled)
+            var registrationSubmissions = await dbContext.Submissions
+                .Where(s => s.Type == SubmissionType.Registration)
+                .ToListAsync(cancellationToken);
+
+            var submissionsByEmail = registrationSubmissions
+                .Where(s => !string.IsNullOrWhiteSpace(s.Email))
+                .GroupBy(s => s.Email.Trim().ToLowerInvariant())
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.CreatedAt).First());
+
+            // Sync from student invitations
+            foreach (var invite in studentInvites)
             {
-                var existingStudentEmails = new HashSet<string>(
-                    students.Select(s => (s.Email ?? string.Empty).Trim().ToLowerInvariant()),
-                    StringComparer.OrdinalIgnoreCase);
-
-                foreach (var invite in studentInvites)
+                var cleanEmail = (invite.Email ?? string.Empty).Trim().ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(cleanEmail) || studentEmails.Contains(cleanEmail))
                 {
-                    var cleanEmail = (invite.Email ?? string.Empty).Trim().ToLowerInvariant();
-                    if (string.IsNullOrWhiteSpace(cleanEmail) || existingStudentEmails.Contains(cleanEmail))
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    var existingUser = await userManager.FindByEmailAsync(cleanEmail);
-                    if (existingUser != null)
+                var existingUser = await userManager.FindByEmailAsync(cleanEmail);
+                if (existingUser != null)
+                {
+                    if (!staffUserIds.Contains(existingUser.Id))
                     {
                         var roles = await userManager.GetRolesAsync(existingUser);
                         if (!roles.Contains("Student"))
@@ -55,38 +98,111 @@ namespace Trailblazers.Backend.WebApi.Controllers
                             await userManager.AddToRoleAsync(existingUser, "Student");
                         }
                         students.Add(existingUser);
-                        existingStudentEmails.Add(cleanEmail);
+                        studentEmails.Add(cleanEmail);
+                    }
+                }
+                else
+                {
+                    submissionsByEmail.TryGetValue(cleanEmail, out var sub);
+                    string? phone = null;
+                    if (!string.IsNullOrWhiteSpace(sub?.Metadata))
+                    {
+                        try
+                        {
+                            using var doc = System.Text.Json.JsonDocument.Parse(sub.Metadata);
+                            if (doc.RootElement.TryGetProperty("PhoneNumber", out var pProp))
+                            {
+                                phone = pProp.GetString();
+                            }
+                            else if (doc.RootElement.TryGetProperty("Phone", out var pProp2))
+                            {
+                                phone = pProp2.GetString();
+                            }
+                        }
+                        catch { }
+                    }
+
+                    var newUser = new ApplicationUser
+                    {
+                        UserName = cleanEmail,
+                        Email = cleanEmail,
+                        FullName = invite.FullName,
+                        PhoneNumber = phone,
+                        EmailConfirmed = invite.IsAccepted,
+                        IsActive = true,
+                        CreatedAt = invite.CreatedAt
+                    };
+
+                    var tempPassword = Guid.NewGuid().ToString("N") + "!Aa1";
+                    var createRes = await userManager.CreateAsync(newUser, tempPassword);
+                    if (createRes.Succeeded)
+                    {
+                        await userManager.AddToRoleAsync(newUser, "Student");
+                        students.Add(newUser);
+                        studentEmails.Add(cleanEmail);
+                        logger.LogInformation("Provisioned student ApplicationUser from invitation for {Email} ({Name})",
+                            cleanEmail, invite.FullName);
+                    }
+                }
+            }
+
+            // Sync from registrations where AccountCreated is true
+            foreach (var (subEmail, sub) in submissionsByEmail)
+            {
+                if (studentEmails.Contains(subEmail) || staffEmails.Contains(subEmail)) continue;
+
+                bool accountCreated = false;
+                string? phone = null;
+                if (!string.IsNullOrWhiteSpace(sub.Metadata))
+                {
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(sub.Metadata);
+                        if (doc.RootElement.TryGetProperty("AccountCreated", out var acProp))
+                        {
+                            accountCreated = acProp.ValueKind == System.Text.Json.JsonValueKind.True ||
+                                             (acProp.ValueKind == System.Text.Json.JsonValueKind.String &&
+                                              string.Equals(acProp.GetString(), "true", StringComparison.OrdinalIgnoreCase));
+                        }
+                        if (doc.RootElement.TryGetProperty("PhoneNumber", out var pProp))
+                        {
+                            phone = pProp.GetString();
+                        }
+                        else if (doc.RootElement.TryGetProperty("Phone", out var pProp2))
+                        {
+                            phone = pProp2.GetString();
+                        }
+                    }
+                    catch { }
+                }
+
+                if (accountCreated)
+                {
+                    var existingUser = await userManager.FindByEmailAsync(subEmail);
+                    if (existingUser != null)
+                    {
+                        if (!staffUserIds.Contains(existingUser.Id))
+                        {
+                            var roles = await userManager.GetRolesAsync(existingUser);
+                            if (!roles.Contains("Student"))
+                            {
+                                await userManager.AddToRoleAsync(existingUser, "Student");
+                            }
+                            students.Add(existingUser);
+                            studentEmails.Add(subEmail);
+                        }
                     }
                     else
                     {
-                        var sub = await dbContext.Submissions.FirstOrDefaultAsync(s => s.Email == cleanEmail, cancellationToken);
-                        string? phone = null;
-                        if (!string.IsNullOrWhiteSpace(sub?.Metadata))
-                        {
-                            try
-                            {
-                                using var doc = System.Text.Json.JsonDocument.Parse(sub.Metadata);
-                                if (doc.RootElement.TryGetProperty("PhoneNumber", out var pProp))
-                                {
-                                    phone = pProp.GetString();
-                                }
-                                else if (doc.RootElement.TryGetProperty("Phone", out var pProp2))
-                                {
-                                    phone = pProp2.GetString();
-                                }
-                            }
-                            catch { }
-                        }
-
                         var newUser = new ApplicationUser
                         {
-                            UserName = cleanEmail,
-                            Email = cleanEmail,
-                            FullName = invite.FullName,
+                            UserName = subEmail,
+                            Email = subEmail,
+                            FullName = sub.Name,
                             PhoneNumber = phone,
-                            EmailConfirmed = true,
+                            EmailConfirmed = false,
                             IsActive = true,
-                            CreatedAt = invite.CreatedAt
+                            CreatedAt = sub.CreatedAt
                         };
 
                         var tempPassword = Guid.NewGuid().ToString("N") + "!Aa1";
@@ -95,9 +211,9 @@ namespace Trailblazers.Backend.WebApi.Controllers
                         {
                             await userManager.AddToRoleAsync(newUser, "Student");
                             students.Add(newUser);
-                            existingStudentEmails.Add(cleanEmail);
-                            logger.LogInformation("Auto-synced student ApplicationUser for enrolled student {Email} ({Name})",
-                                cleanEmail, invite.FullName);
+                            studentEmails.Add(subEmail);
+                            logger.LogInformation("Provisioned student ApplicationUser from registration for {Email} ({Name})",
+                                subEmail, sub.Name);
                         }
                     }
                 }
@@ -121,6 +237,48 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     }), 1);
                 }
 
+                invitesByEmail.TryGetValue(sEmail, out var invite);
+                submissionsByEmail.TryGetValue(sEmail, out var sub);
+
+                string? inviteUrl = null;
+                if (!string.IsNullOrWhiteSpace(sub?.Metadata))
+                {
+                    try
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(sub.Metadata);
+                        if (doc.RootElement.TryGetProperty("AccountInviteUrl", out var urlProp))
+                        {
+                            inviteUrl = urlProp.GetString();
+                        }
+                    }
+                    catch { }
+                }
+
+                // Determine genuine activation status
+                bool isActivated;
+                if (invite != null)
+                {
+                    isActivated = invite.IsAccepted;
+                }
+                else
+                {
+                    isActivated = s.EmailConfirmed;
+                }
+
+                string status;
+                if (!s.IsActive)
+                {
+                    status = "Suspended";
+                }
+                else if (!isActivated)
+                {
+                    status = "Pending Activation";
+                }
+                else
+                {
+                    status = "Active";
+                }
+
                 return new AdminStudentListItemDto
                 {
                     Id = s.Id,
@@ -128,6 +286,10 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     Email = s.Email ?? string.Empty,
                     PhoneNumber = s.PhoneNumber,
                     IsActive = s.IsActive,
+                    Status = status,
+                    IsActivated = isActivated,
+                    IsPendingActivation = !isActivated,
+                    InviteUrl = inviteUrl,
                     DisabledReason = s.DisabledReason,
                     ProfilePictureUrl = s.ProfilePictureUrl,
                     TotalTestsTaken = testsCount,
@@ -312,6 +474,10 @@ namespace Trailblazers.Backend.WebApi.Controllers
         public string Email { get; set; } = string.Empty;
         public string? PhoneNumber { get; set; }
         public bool IsActive { get; set; }
+        public string Status { get; set; } = "Active"; // "Active", "Pending Activation", "Suspended"
+        public bool IsActivated { get; set; }
+        public bool IsPendingActivation { get; set; }
+        public string? InviteUrl { get; set; }
         public string? DisabledReason { get; set; }
         public string? ProfilePictureUrl { get; set; }
         public int TotalTestsTaken { get; set; }

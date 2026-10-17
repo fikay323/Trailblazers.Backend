@@ -169,7 +169,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
                     Email = cleanEmail,
                     FullName = cleanName,
                     PhoneNumber = phoneNumber,
-                    EmailConfirmed = true,
+                    EmailConfirmed = false,
                     IsActive = true,
                     CreatedAt = DateTimeOffset.UtcNow
                 };
