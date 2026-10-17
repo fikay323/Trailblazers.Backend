@@ -13,6 +13,7 @@ using Trailblazers.Backend.Infrastructure.Persistence;
 using Trailblazers.Backend.Infrastructure.Persistence.Repositories;
 using Trailblazers.Backend.Infrastructure.Services;
 using Trailblazers.Backend.Core.Application.Features.GuardianPortal.Interfaces;
+using Trailblazers.Backend.Core.Application.Features.Blog.Interfaces;
 using Trailblazers.Backend.WebApi.Authentication;
 
 DotNetEnv.Env.Load();
@@ -161,6 +162,7 @@ builder.Services.AddScoped<IGuardianReportService, GuardianReportService>();
 builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<IGuardianPortalService, GuardianPortalService>();
 builder.Services.AddScoped<IImageStorageService, CloudinaryService>();
+builder.Services.AddScoped<IBlogService, BlogService>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>(
@@ -245,6 +247,29 @@ using (var scope = app.Services.CreateScope())
                 CREATE INDEX IF NOT EXISTS ""IX_student_notifications_StudentEmail"" ON student_notifications (""StudentEmail"");
                 CREATE INDEX IF NOT EXISTS ""IX_student_notifications_CreatedAt"" ON student_notifications (""CreatedAt"");
                 CREATE INDEX IF NOT EXISTS ""IX_student_notifications_IsRead"" ON student_notifications (""IsRead"");
+
+                -- 4. Ensure blog_posts table exists
+                CREATE TABLE IF NOT EXISTS blog_posts (
+                    ""Id"" uuid NOT NULL PRIMARY KEY,
+                    ""Title"" character varying(250) NOT NULL,
+                    ""Slug"" character varying(250) NOT NULL,
+                    ""Excerpt"" character varying(600) NOT NULL,
+                    ""Content"" text NOT NULL,
+                    ""CoverImageUrl"" character varying(1000) NULL,
+                    ""Category"" character varying(100) NOT NULL,
+                    ""Tags"" text[] NOT NULL DEFAULT '{}',
+                    ""AuthorName"" character varying(200) NOT NULL,
+                    ""AuthorId"" uuid NULL,
+                    ""IsPublished"" boolean NOT NULL DEFAULT false,
+                    ""PublishedAt"" timestamp with time zone NULL,
+                    ""CreatedAt"" timestamp with time zone NOT NULL,
+                    ""UpdatedAt"" timestamp with time zone NULL,
+                    ""ViewCount"" integer NOT NULL DEFAULT 0
+                );
+                CREATE UNIQUE INDEX IF NOT EXISTS ""IX_blog_posts_Slug"" ON blog_posts (""Slug"");
+                CREATE INDEX IF NOT EXISTS ""IX_blog_posts_IsPublished"" ON blog_posts (""IsPublished"");
+                CREATE INDEX IF NOT EXISTS ""IX_blog_posts_Category"" ON blog_posts (""Category"");
+                CREATE INDEX IF NOT EXISTS ""IX_blog_posts_CreatedAt"" ON blog_posts (""CreatedAt"");
             ");
             app.Logger.LogInformation("Idempotent schema safety patch executed successfully.");
         }

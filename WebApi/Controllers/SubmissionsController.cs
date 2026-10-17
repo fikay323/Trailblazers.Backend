@@ -176,8 +176,9 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     return BadRequest(new { error = "Accounts can only be created for registration submissions." });
                 }
 
-                // Parse metadata to extract target exam
+                // Parse metadata to extract target exam and phone number
                 string targetExam = "JAMB / WAEC";
+                string? phoneNumber = null;
                 if (!string.IsNullOrWhiteSpace(submission.Metadata))
                 {
                     try
@@ -186,6 +187,14 @@ namespace Trailblazers.Backend.WebApi.Controllers
                         if (doc.RootElement.TryGetProperty("TargetExam", out var examProp))
                         {
                             targetExam = examProp.GetString() ?? targetExam;
+                        }
+                        if (doc.RootElement.TryGetProperty("PhoneNumber", out var phoneProp))
+                        {
+                            phoneNumber = phoneProp.GetString();
+                        }
+                        else if (doc.RootElement.TryGetProperty("Phone", out var pProp))
+                        {
+                            phoneNumber = pProp.GetString();
                         }
                     }
                     catch
@@ -210,6 +219,7 @@ namespace Trailblazers.Backend.WebApi.Controllers
                     targetExam: targetExam,
                     invitedByUserId: inviterId,
                     invitedByUserName: inviterName,
+                    phoneNumber: phoneNumber,
                     cancellationToken: cancellationToken);
 
                 // Update submission metadata with AccountCreated = true

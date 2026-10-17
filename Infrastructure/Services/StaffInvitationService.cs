@@ -136,6 +136,7 @@ namespace Trailblazers.Backend.Infrastructure.Services
             string targetExam,
             Guid invitedByUserId,
             string invitedByUserName,
+            string? phoneNumber = null,
             CancellationToken cancellationToken = default)
         {
             var cleanEmail = email.Trim().ToLowerInvariant();
@@ -150,6 +151,40 @@ namespace Trailblazers.Backend.Infrastructure.Services
                 if (existingRoles.Contains("Student"))
                 {
                     throw new InvalidOperationException($"A student account with email '{cleanEmail}' already exists.");
+                }
+
+                await userManager.AddToRoleAsync(existingUser, "Student");
+                if (!string.IsNullOrWhiteSpace(phoneNumber) && string.IsNullOrWhiteSpace(existingUser.PhoneNumber))
+                {
+                    existingUser.PhoneNumber = phoneNumber;
+                    await userManager.UpdateAsync(existingUser);
+                }
+            }
+            else
+            {
+                // Immediately provision ApplicationUser so the student is officially enrolled in the directory
+                var newUser = new ApplicationUser
+                {
+                    UserName = cleanEmail,
+                    Email = cleanEmail,
+                    FullName = cleanName,
+                    PhoneNumber = phoneNumber,
+                    EmailConfirmed = true,
+                    IsActive = true,
+                    CreatedAt = DateTimeOffset.UtcNow
+                };
+
+                var tempPassword = Guid.NewGuid().ToString("N") + "!Aa1";
+                var createResult = await userManager.CreateAsync(newUser, tempPassword);
+                if (createResult.Succeeded)
+                {
+                    await userManager.AddToRoleAsync(newUser, "Student");
+                    logger.LogInformation("Provisioned student account for {Email} ({Name})", cleanEmail, cleanName);
+                }
+                else
+                {
+                    logger.LogWarning("Could not immediately provision ApplicationUser for {Email}: {Errors}",
+                        cleanEmail, string.Join("; ", createResult.Errors.Select(e => e.Description)));
                 }
             }
 

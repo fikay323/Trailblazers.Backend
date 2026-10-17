@@ -25,7 +25,84 @@ namespace Trailblazers.Backend.WebApi.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAllStudents(CancellationToken cancellationToken)
         {
-            var students = await userManager.GetUsersInRoleAsync("Student");
+            var students = (await userManager.GetUsersInRoleAsync("Student")).ToList();
+
+            // Self-heal & sync any student accounts enrolled via staff invitations (e.g. Oladejo Sunday)
+            var studentInvites = await dbContext.StaffInvitations
+                .Where(x => x.Role == "Student")
+                .ToListAsync(cancellationToken);
+
+            if (studentInvites.Count > 0)
+            {
+                var existingStudentEmails = new HashSet<string>(
+                    students.Select(s => (s.Email ?? string.Empty).Trim().ToLowerInvariant()),
+                    StringComparer.OrdinalIgnoreCase);
+
+                foreach (var invite in studentInvites)
+                {
+                    var cleanEmail = (invite.Email ?? string.Empty).Trim().ToLowerInvariant();
+                    if (string.IsNullOrWhiteSpace(cleanEmail) || existingStudentEmails.Contains(cleanEmail))
+                    {
+                        continue;
+                    }
+
+                    var existingUser = await userManager.FindByEmailAsync(cleanEmail);
+                    if (existingUser != null)
+                    {
+                        var roles = await userManager.GetRolesAsync(existingUser);
+                        if (!roles.Contains("Student"))
+                        {
+                            await userManager.AddToRoleAsync(existingUser, "Student");
+                        }
+                        students.Add(existingUser);
+                        existingStudentEmails.Add(cleanEmail);
+                    }
+                    else
+                    {
+                        var sub = await dbContext.Submissions.FirstOrDefaultAsync(s => s.Email == cleanEmail, cancellationToken);
+                        string? phone = null;
+                        if (!string.IsNullOrWhiteSpace(sub?.Metadata))
+                        {
+                            try
+                            {
+                                using var doc = System.Text.Json.JsonDocument.Parse(sub.Metadata);
+                                if (doc.RootElement.TryGetProperty("PhoneNumber", out var pProp))
+                                {
+                                    phone = pProp.GetString();
+                                }
+                                else if (doc.RootElement.TryGetProperty("Phone", out var pProp2))
+                                {
+                                    phone = pProp2.GetString();
+                                }
+                            }
+                            catch { }
+                        }
+
+                        var newUser = new ApplicationUser
+                        {
+                            UserName = cleanEmail,
+                            Email = cleanEmail,
+                            FullName = invite.FullName,
+                            PhoneNumber = phone,
+                            EmailConfirmed = true,
+                            IsActive = true,
+                            CreatedAt = invite.CreatedAt
+                        };
+
+                        var tempPassword = Guid.NewGuid().ToString("N") + "!Aa1";
+                        var createRes = await userManager.CreateAsync(newUser, tempPassword);
+                        if (createRes.Succeeded)
+                        {
+                            await userManager.AddToRoleAsync(newUser, "Student");
+                            students.Add(newUser);
+                            existingStudentEmails.Add(cleanEmail);
+                            logger.LogInformation("Auto-synced student ApplicationUser for enrolled student {Email} ({Name})",
+                                cleanEmail, invite.FullName);
+                        }
+                    }
+                }
+            }
+
             var allResults = (await sessionRepository.GetAllResultsAsync(cancellationToken)).ToList();
 
             var studentDtos = students.Select(s =>

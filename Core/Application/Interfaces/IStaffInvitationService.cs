@@ -16,6 +16,7 @@ namespace Trailblazers.Backend.Core.Application.Interfaces
             string targetExam,
             Guid invitedByUserId,
             string invitedByUserName,
+            string? phoneNumber = null,
             CancellationToken cancellationToken = default);
 
         Task<ValidateInvitationResponseDto> ValidateInvitationAsync(
