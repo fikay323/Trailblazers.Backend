@@ -289,6 +289,30 @@ namespace Trailblazers.Backend.WebApi.Controllers
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to retrieve student notifications for {Email}", email);
+                if (ex.Message.Contains("does not exist") || ex.ToString().Contains("42P01"))
+                {
+                    try
+                    {
+                        await dbContext.Database.ExecuteSqlRawAsync(@"
+                            CREATE TABLE IF NOT EXISTS student_notifications (
+                                ""Id"" uuid NOT NULL PRIMARY KEY,
+                                ""StudentId"" uuid NOT NULL,
+                                ""StudentEmail"" character varying(256) NOT NULL,
+                                ""Title"" character varying(200) NOT NULL,
+                                ""Message"" character varying(2000) NOT NULL,
+                                ""Type"" character varying(50) NOT NULL DEFAULT 'General',
+                                ""IsRead"" boolean NOT NULL DEFAULT false,
+                                ""CreatedAt"" timestamp with time zone NOT NULL,
+                                ""CreatedBy"" character varying(200) NULL
+                            );
+                        ", cancellationToken);
+                        return Ok(new List<object>());
+                    }
+                    catch (Exception healEx)
+                    {
+                        logger.LogError(healEx, "Failed to auto-heal student_notifications table");
+                    }
+                }
                 return StatusCode(500, new { error = ex.Message, details = ex.ToString() });
             }
         }

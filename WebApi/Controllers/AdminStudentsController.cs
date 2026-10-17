@@ -433,6 +433,24 @@ namespace Trailblazers.Backend.WebApi.Controllers
                 // 1. Create in-app student notification for this specific student
                 try
                 {
+                    try
+                    {
+                        await dbContext.Database.ExecuteSqlRawAsync(@"
+                            CREATE TABLE IF NOT EXISTS student_notifications (
+                                ""Id"" uuid NOT NULL PRIMARY KEY,
+                                ""StudentId"" uuid NOT NULL,
+                                ""StudentEmail"" character varying(256) NOT NULL,
+                                ""Title"" character varying(200) NOT NULL,
+                                ""Message"" character varying(2000) NOT NULL,
+                                ""Type"" character varying(50) NOT NULL DEFAULT 'General',
+                                ""IsRead"" boolean NOT NULL DEFAULT false,
+                                ""CreatedAt"" timestamp with time zone NOT NULL,
+                                ""CreatedBy"" character varying(200) NULL
+                            );
+                        ", cancellationToken);
+                    }
+                    catch { }
+
                     var notification = new StudentNotification
                     {
                         Id = Guid.NewGuid(),
