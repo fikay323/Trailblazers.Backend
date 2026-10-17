@@ -387,102 +387,124 @@ namespace Trailblazers.Backend.WebApi.Controllers
             [FromQuery] string? reason = null,
             CancellationToken cancellationToken = default)
         {
-            var student = await userManager.FindByIdAsync(id.ToString());
-            if (student == null)
-            {
-                return NotFound(new { error = "Student not found." });
-            }
-
-            var effectiveReason = !string.IsNullOrWhiteSpace(request?.Reason)
-                ? request.Reason.Trim()
-                : (!string.IsNullOrWhiteSpace(reason)
-                    ? reason.Trim()
-                    : "Profile picture did not comply with academy standards.");
-
-            // Clean up Cloudinary asset if present
-            if (!string.IsNullOrWhiteSpace(student.ProfilePicturePublicId))
-            {
-                logger.LogInformation("Admin deleting Cloudinary asset {PublicId} for student {StudentId}",
-                    student.ProfilePicturePublicId, student.Id);
-                await imageStorageService.DeleteImageAsync(student.ProfilePicturePublicId, cancellationToken);
-            }
-
-            student.ProfilePictureUrl = null;
-            student.ProfilePicturePublicId = null;
-
-            var updateResult = await userManager.UpdateAsync(student);
-            if (!updateResult.Succeeded)
-            {
-                var errors = string.Join("; ", updateResult.Errors.Select(e => e.Description));
-                return StatusCode(StatusCodes.Status500InternalServerError, new { error = errors });
-            }
-
-            var actorName = User.FindFirstValue("fullName")
-                            ?? User.FindFirstValue(ClaimTypes.Name)
-                            ?? "Academy Administration";
-
-            // 1. Create in-app student notification for this specific student
-            var notification = new StudentNotification
-            {
-                Id = Guid.NewGuid(),
-                StudentId = student.Id,
-                StudentEmail = student.Email ?? string.Empty,
-                Title = "Profile Picture Removed",
-                Message = $"Your profile picture was removed by {actorName}. Reason: {effectiveReason}",
-                Type = "ProfilePictureRemoved",
-                IsRead = false,
-                CreatedAt = DateTimeOffset.UtcNow,
-                CreatedBy = actorName
-            };
-            dbContext.StudentNotifications.Add(notification);
-
-            // 2. Create high-priority Announcement for Noticeboard
-            var noticeboardAnnouncement = new Announcement
-            {
-                Id = Guid.NewGuid(),
-                Title = "Profile Picture Notice - Removal Action",
-                Content = $"Official Notice for {student.FullName}: Your uploaded profile photograph was removed by {actorName}. Reason: {effectiveReason}. Please upload an appropriate passport photograph compliant with academy guidelines.",
-                Priority = AnnouncementPriority.Urgent,
-                TargetAudience = "All",
-                IsActive = true,
-                CreatedAt = DateTimeOffset.UtcNow,
-                AuthorName = actorName
-            };
-            dbContext.Announcements.Add(noticeboardAnnouncement);
-
-            await dbContext.SaveChangesAsync(cancellationToken);
-
-            // Dispatch notification email to student
             try
             {
-                var portalUrl = configuration["Frontend:StudentPortalUrl"]
-                                ?? "https://learn.trailblazer.com/student/dashboard";
+                var student = await userManager.FindByIdAsync(id.ToString());
+                if (student == null)
+                {
+                    return NotFound(new { error = "Student not found." });
+                }
 
-                var emailHtml = emailTemplateService.RenderProfilePictureRemovedEmail(
-                    student.FullName,
-                    effectiveReason,
-                    portalUrl);
+                var effectiveReason = !string.IsNullOrWhiteSpace(request?.Reason)
+                    ? request.Reason.Trim()
+                    : (!string.IsNullOrWhiteSpace(reason)
+                        ? reason.Trim()
+                        : "Profile picture did not comply with academy standards.");
 
-                await mailService.SendEmailAsync(
-                    student.Email!,
-                    "Profile Picture Removal Notice - Trailblazers Academy",
-                    emailHtml,
-                    isHtml: true);
+                // Clean up Cloudinary asset if present (safe try/catch so storage errors don't block removal)
+                if (!string.IsNullOrWhiteSpace(student.ProfilePicturePublicId))
+                {
+                    try
+                    {
+                        logger.LogInformation("Admin deleting Cloudinary asset {PublicId} for student {StudentId}",
+                            student.ProfilePicturePublicId, student.Id);
+                        await imageStorageService.DeleteImageAsync(student.ProfilePicturePublicId, cancellationToken);
+                    }
+                    catch (Exception cldEx)
+                    {
+                        logger.LogWarning(cldEx, "Cloudinary image deletion warning for {PublicId}", student.ProfilePicturePublicId);
+                    }
+                }
+
+                student.ProfilePictureUrl = null;
+                student.ProfilePicturePublicId = null;
+
+                var updateResult = await userManager.UpdateAsync(student);
+                if (!updateResult.Succeeded)
+                {
+                    var errors = string.Join("; ", updateResult.Errors.Select(e => e.Description));
+                    return StatusCode(StatusCodes.Status500InternalServerError, new { error = errors });
+                }
+
+                var actorName = User.FindFirstValue("fullName")
+                                ?? User.FindFirstValue(ClaimTypes.Name)
+                                ?? "Academy Administration";
+
+                // 1. Create in-app student notification for this specific student
+                try
+                {
+                    var notification = new StudentNotification
+                    {
+                        Id = Guid.NewGuid(),
+                        StudentId = student.Id,
+                        StudentEmail = student.Email ?? string.Empty,
+                        Title = "Profile Picture Removed",
+                        Message = $"Your profile picture was removed by {actorName}. Reason: {effectiveReason}",
+                        Type = "ProfilePictureRemoved",
+                        IsRead = false,
+                        CreatedAt = DateTimeOffset.UtcNow,
+                        CreatedBy = actorName
+                    };
+                    dbContext.StudentNotifications.Add(notification);
+
+                    // 2. Create high-priority Announcement for Noticeboard
+                    var noticeboardAnnouncement = new Announcement
+                    {
+                        Id = Guid.NewGuid(),
+                        Title = "Profile Picture Notice - Removal Action",
+                        Content = $"Official Notice for {student.FullName}: Your uploaded profile photograph was removed by {actorName}. Reason: {effectiveReason}. Please upload an appropriate passport photograph compliant with academy guidelines.",
+                        Priority = AnnouncementPriority.Urgent,
+                        TargetAudience = "All",
+                        IsActive = true,
+                        CreatedAt = DateTimeOffset.UtcNow,
+                        AuthorName = actorName
+                    };
+                    dbContext.Announcements.Add(noticeboardAnnouncement);
+
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                }
+                catch (Exception dbEx)
+                {
+                    logger.LogWarning(dbEx, "Failed to persist student notification or announcement to database");
+                }
+
+                // Dispatch notification email to student
+                try
+                {
+                    var portalUrl = configuration["Frontend:StudentPortalUrl"]
+                                    ?? "https://learn.trailblazer.com/student/dashboard";
+
+                    var emailHtml = emailTemplateService.RenderProfilePictureRemovedEmail(
+                        student.FullName,
+                        effectiveReason,
+                        portalUrl);
+
+                    await mailService.SendEmailAsync(
+                        student.Email!,
+                        "Profile Picture Removal Notice - Trailblazers Academy",
+                        emailHtml,
+                        isHtml: true);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Failed to send profile picture removal email to {Email}", student.Email);
+                }
+
+                logger.LogInformation("Admin/Staff successfully removed profile picture for student {Email} with reason: {Reason}",
+                    student.Email, effectiveReason);
+
+                return Ok(new
+                {
+                    message = "Student profile picture removed successfully and notification dispatched.",
+                    studentId = student.Id,
+                    reason = effectiveReason
+                });
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to send profile picture removal email to {Email}", student.Email);
+                logger.LogError(ex, "Unhandled exception in DeleteStudentProfilePicture for student {StudentId}", id);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { error = ex.Message, details = ex.ToString() });
             }
-
-            logger.LogInformation("Admin/Staff successfully removed profile picture for student {Email} with reason: {Reason}",
-                student.Email, reason);
-
-            return Ok(new
-            {
-                message = "Student profile picture removed successfully and notification dispatched.",
-                studentId = student.Id,
-                reason
-            });
         }
     }
 
