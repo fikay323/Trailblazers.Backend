@@ -4,6 +4,7 @@ namespace Trailblazers.Backend.Core.Domain.Entities
 {
 	public class SiteAsset
 	{
+		public Guid Id { get; set; } = Guid.NewGuid();
 		public string Key { get; set; } = string.Empty;
 		public string Group { get; set; } = string.Empty;
 		public string ImageUrl { get; set; } = string.Empty;
