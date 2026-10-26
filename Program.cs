@@ -29,6 +29,7 @@ builder.Services.AddControllers()
     });
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddOpenApi();
+builder.Services.AddResponseCaching();
 
 // PostgreSQL Connection String
 var connectionString = Environment.GetEnvironmentVariable("CONNECTION_STRING")
@@ -184,6 +185,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("CorsPolicy");
+
+app.UseResponseCaching();
 
 app.UseHttpsRedirection();
 

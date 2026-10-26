@@ -45,7 +45,6 @@ namespace Trailblazers.Backend.WebApi.Controllers
 		/// Retrieves site assets with optional group filtering.
 		/// </summary>
 		[HttpGet("api/site-assets")]
-		[ResponseCache(Duration = 60, Location = ResponseCacheLocation.Any, VaryByQueryKeys = ["group"])]
 		public async Task<IActionResult> GetAllAssets(
 			[FromQuery] string? group = null,
 			CancellationToken cancellationToken = default)
