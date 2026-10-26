@@ -19,6 +19,7 @@ namespace Trailblazers.Backend.Infrastructure.Persistence
         public DbSet<Announcement> Announcements => Set<Announcement>();
         public DbSet<StudentNotification> StudentNotifications => Set<StudentNotification>();
         public DbSet<BlogPost> BlogPosts => Set<BlogPost>();
+        public DbSet<SiteAsset> SiteAssets => Set<SiteAsset>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

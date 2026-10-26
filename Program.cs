@@ -14,6 +14,7 @@ using Trailblazers.Backend.Infrastructure.Persistence.Repositories;
 using Trailblazers.Backend.Infrastructure.Services;
 using Trailblazers.Backend.Core.Application.Features.GuardianPortal.Interfaces;
 using Trailblazers.Backend.Core.Application.Features.Blog.Interfaces;
+using Trailblazers.Backend.Core.Application.Features.SiteAssets.Interfaces;
 using Trailblazers.Backend.WebApi.Authentication;
 
 DotNetEnv.Env.Load();
@@ -163,6 +164,7 @@ builder.Services.AddScoped<IAnnouncementService, AnnouncementService>();
 builder.Services.AddScoped<IGuardianPortalService, GuardianPortalService>();
 builder.Services.AddScoped<IImageStorageService, CloudinaryService>();
 builder.Services.AddScoped<IBlogService, BlogService>();
+builder.Services.AddScoped<ISiteAssetService, SiteAssetService>();
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<ApplicationDbContext>(

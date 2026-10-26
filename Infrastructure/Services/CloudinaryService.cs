@@ -1,3 +1,7 @@
+using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using CloudinaryDotNet;
 using CloudinaryDotNet.Actions;
 using Microsoft.Extensions.Configuration;
@@ -75,6 +79,61 @@ namespace Trailblazers.Backend.Infrastructure.Services
 			}
 
 			_logger.LogInformation("Profile picture uploaded successfully for user {UserId}. PublicId: {PublicId}", userId, uploadResult.PublicId);
+			return (uploadResult.SecureUrl?.ToString() ?? uploadResult.Url?.ToString() ?? string.Empty, uploadResult.PublicId);
+		}
+
+		public async Task<(string Url, string PublicId)> UploadMediaAsync(
+			Stream stream,
+			string fileName,
+			string folder = "trailblazers/site-assets",
+			int? maxWidth = null,
+			int? maxHeight = null,
+			CancellationToken cancellationToken = default)
+		{
+			if (stream == null || stream.Length == 0)
+			{
+				throw new ArgumentException("Image stream cannot be null or empty", nameof(stream));
+			}
+
+			var cleanFolder = string.IsNullOrWhiteSpace(folder) ? "trailblazers/site-assets" : folder.Trim();
+			var rawName = Path.GetFileNameWithoutExtension(fileName) ?? "asset";
+			var safeFileName = string.Join("_", rawName.Split(Path.GetInvalidFileNameChars()))
+				.Replace(" ", "_")
+				.ToLowerInvariant();
+			if (string.IsNullOrWhiteSpace(safeFileName))
+			{
+				safeFileName = "asset";
+			}
+
+			var transformation = new Transformation()
+				.Quality("auto")
+				.FetchFormat("auto");
+
+			if (maxWidth.HasValue || maxHeight.HasValue)
+			{
+				if (maxWidth.HasValue) transformation.Width(maxWidth.Value);
+				if (maxHeight.HasValue) transformation.Height(maxHeight.Value);
+				transformation.Crop("limit");
+			}
+
+			var uploadParams = new ImageUploadParams
+			{
+				File = new FileDescription(fileName, stream),
+				Folder = cleanFolder,
+				PublicId = $"{safeFileName}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}",
+				Overwrite = false,
+				Transformation = transformation
+			};
+
+			var uploadResult = await _cloudinary.UploadAsync(uploadParams, cancellationToken);
+
+			if (uploadResult.Error != null)
+			{
+				_logger.LogError("Cloudinary media upload failed: {Error}", uploadResult.Error.Message);
+				throw new InvalidOperationException($"Media upload failed: {uploadResult.Error.Message}");
+			}
+
+			_logger.LogInformation("Media uploaded successfully to {Folder}. PublicId: {PublicId}", cleanFolder, uploadResult.PublicId);
 			return (uploadResult.SecureUrl?.ToString() ?? uploadResult.Url?.ToString() ?? string.Empty, uploadResult.PublicId);
 		}
 
